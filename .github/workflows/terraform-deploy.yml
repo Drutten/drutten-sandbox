@@ -1,0 +1,65 @@
+name: Tofu Deploy
+
+on:
+  workflow_call:
+    secrets:
+      project_number:
+        description: 'Project ID'
+        required: true
+      service_account:
+        description: 'Service account'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    env:
+      TERRAFORM_DIR: terraform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: opentofu/setup-opentofu@v1
+
+      # Auth to GCP via Workload Identity Federation so OpenTofu can call Google APIs using ADC
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ secrets.project_number }}/locations/global/workloadIdentityPools/github/providers/github
+          service_account: ${{ secrets.service_account }}
+
+      - name: Initialize Tofu
+        run: |
+          cd $TERRAFORM_DIR
+          tofu init -upgrade
+
+      - name: Tofu Format
+        run: |
+          cd $TERRAFORM_DIR
+          tofu fmt -recursive -check
+
+      - name: Tofu Validate
+        id: validate
+        run: |
+          cd $TERRAFORM_DIR
+          tofu validate -no-color
+
+      - name: Tofu Plan
+        id: plan
+        if: steps.validate.outcome == 'success'
+        run: |
+          cd $TERRAFORM_DIR
+          tofu plan -input=false -out 'plan.tfplan'
+
+      - name: Tofu Apply
+        if: steps.validate.outcome == 'success' && github.event_name != 'pull_request'
+        run: |
+          cd $TERRAFORM_DIR
+          tofu apply -auto-approve 'plan.tfplan'
