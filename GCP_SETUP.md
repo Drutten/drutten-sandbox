@@ -53,7 +53,7 @@ Add these in your repo: **Settings → Secrets and variables → Actions**
 - `GCP_SERVICE_ACCOUNT` - Email: `github-actions@PROJECT_ID.iam.gserviceaccount.com`
 
 **Variables:**
-- `DOCKER_IMAGE_PATH` - Example: `europe-west1-docker.pkg.dev/PROJECT_ID/drutten-sandbox`
+- `DOCKER_IMAGE_PATH` - Example: `europe-west1-docker.pkg.dev/PROJECT_ID/drutten-sandbox` (needed when enabling Docker push)
 
 ---
 
