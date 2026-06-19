@@ -53,10 +53,15 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Authenticate to GCP
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # auth@v3 requires create_credentials_file for gcloud/setup-gcloud to pick up ADC
+      - id: auth
+        name: Authenticate to GCP
         uses: google-github-actions/auth@v3
         with:
-          create_credentials_file: false
+          create_credentials_file: true
           workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
@@ -65,7 +70,7 @@ jobs:
 
       - name: Verify authentication
         run: |
-          ACTIVE_SA=$(gcloud auth list --filter=status:ACTIVE --format="value(account)")
+          ACTIVE_SA=$(gcloud config get-value account)
           echo "Authenticated as: $ACTIVE_SA"
           test "$ACTIVE_SA" = "${{ secrets.GCP_SERVICE_ACCOUNT }}"
           gcloud run services list --region=europe-west1 --format="value(name)"
