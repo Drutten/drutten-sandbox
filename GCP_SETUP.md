@@ -64,8 +64,9 @@ Add these in your repo: **Settings → Secrets and variables → Actions**
 ```bash
 export PROJECT_ID="your-gcp-project-id"
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
-export GITHUB_REPO="YOUR_USERNAME/drutten-sandbox"
 export REGION="europe-west1"
+export GITHUB_USERNAME="your-github-username"
+export GITHUB_REPO="${GITHUB_USERNAME}/drutten-sandbox"
 ```
 
 ### 2. Enable Required APIs
@@ -95,7 +96,8 @@ gcloud iam workload-identity-pools providers create-oidc "github" \
   --location="global" \
   --workload-identity-pool="github" \
   --display-name="GitHub provider" \
-  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+  --attribute-condition="assertion.repository_owner=='${GITHUB_USERNAME}' && assertion.repository=='${GITHUB_REPO}'" \
   --issuer-uri="https://token.actions.githubusercontent.com"
 ```
 
