@@ -13,6 +13,9 @@ crash.*.log
 *.tfvars
 *.tfvars.json
 
+# Local backend config (contains project-specific bucket name)
+backend.hcl
+
 # Ignore override files as they are usually used to override resources locally
 override.tf
 override.tf.json

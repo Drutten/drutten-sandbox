@@ -20,17 +20,23 @@ This directory contains Terraform/OpenTofu configuration for managing all GCP in
 
 2. Edit `terraform.tfvars` with your values
 
-3. Initialize Terraform:
+3. Configure the GCS backend (one-time, local only):
    ```bash
-   tofu init
+   cp backend.hcl.example backend.hcl
+   # Edit backend.hcl with the state bucket name
    ```
 
-4. Plan changes:
+4. Initialize Terraform:
+   ```bash
+   tofu init -backend-config=backend.hcl
+   ```
+
+5. Plan changes:
    ```bash
    tofu plan
    ```
 
-5. Apply changes:
+6. Apply changes:
    ```bash
    tofu apply
    ```

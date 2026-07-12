@@ -2,6 +2,19 @@ name: Tofu Deploy
 
 on:
   workflow_call:
+    inputs:
+      project_id:
+        description: 'GCP project ID'
+        required: true
+        type: string
+      docker_image_path:
+        description: 'Base path for Docker images in Artifact Registry'
+        required: true
+        type: string
+      tfstate_bucket:
+        description: 'GCS bucket for Terraform/OpenTofu state'
+        required: true
+        type: string
     secrets:
       project_number:
         description: 'GCP project number (for Workload Identity Federation)'
@@ -20,8 +33,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TERRAFORM_DIR: terraform
-      TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
-      TF_VAR_docker_image_path: ${{ vars.DOCKER_IMAGE_PATH }}
+      TF_VAR_project_id: ${{ inputs.project_id }}
+      TF_VAR_docker_image_path: ${{ inputs.docker_image_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -40,7 +53,9 @@ jobs:
       - name: Initialize Tofu
         run: |
           cd $TERRAFORM_DIR
-          tofu init -upgrade
+          tofu init -upgrade \
+            -backend-config="bucket=${{ inputs.tfstate_bucket }}" \
+            -backend-config="prefix=drutten-sandbox"
 
       - name: Tofu Format
         run: |

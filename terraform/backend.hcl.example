@@ -1,0 +1,6 @@
+# Copy to backend.hcl and fill in your values:
+#   cp backend.hcl.example backend.hcl
+#
+
+bucket = "your-gcp-project-id-tfstate"
+prefix = "drutten-sandbox"

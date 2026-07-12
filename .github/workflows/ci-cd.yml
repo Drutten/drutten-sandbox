@@ -80,6 +80,10 @@ jobs:
     needs: [ci]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     uses: ./.github/workflows/terraform-deploy.yml
+    with:
+      project_id: ${{ vars.GCP_PROJECT_ID }}
+      docker_image_path: ${{ vars.DOCKER_IMAGE_PATH }}
+      tfstate_bucket: ${{ vars.GCP_TFSTATE_BUCKET }}
     secrets:
       project_number: ${{ secrets.GCP_PROJECT_NUMBER }}
       service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}

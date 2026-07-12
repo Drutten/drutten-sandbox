@@ -8,11 +8,8 @@ terraform {
     }
   }
 
-  # Configure backend for state storage
-  backend "gcs" {
-    bucket = "rosi-dev-tfstate"
-    prefix = "drutten-sandbox"
-  }
+  # Backend config is supplied at init time (see backend.hcl.example)
+  backend "gcs" {}
 }
 
 provider "google" {
