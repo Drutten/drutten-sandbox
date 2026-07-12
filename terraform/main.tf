@@ -9,11 +9,10 @@ terraform {
   }
 
   # Configure backend for state storage
-  # Uncomment and configure for GCS backend
-  # backend "gcs" {
-  #   bucket = "your-terraform-state-bucket"
-  #   prefix = "terraform/state"
-  # }
+  backend "gcs" {
+    bucket = "rosi-dev-tfstate"
+    prefix = "drutten-sandbox"
+  }
 }
 
 provider "google" {

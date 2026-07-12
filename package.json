@@ -4,15 +4,20 @@
   "license": "MIT",
   "scripts": {},
   "private": true,
-  "dependencies": {},
   "devDependencies": {
+    "@nx/docker": "22.3.1",
+    "@nx/esbuild": "22.3.1",
     "@nx/js": "22.3.1",
+    "@nx/node": "22.3.1",
     "@swc-node/register": "~1.9.1",
     "@swc/core": "~1.5.7",
     "@swc/helpers": "~0.5.11",
+    "@types/node": "20.19.9",
+    "esbuild": "^0.19.2",
     "nx": "22.3.1",
     "prettier": "~3.6.2",
     "tslib": "^2.3.0",
     "typescript": "~5.9.2"
-  }
+  },
+  "dependencies": {}
 }

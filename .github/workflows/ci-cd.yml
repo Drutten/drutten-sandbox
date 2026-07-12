@@ -75,7 +75,16 @@ jobs:
           test "$ACTIVE_SA" = "${{ secrets.GCP_SERVICE_ACCOUNT }}"
           gcloud run services list --region=europe-west1 --format="value(name)"
 
-  # Uncomment after setting up GCP Workload Identity Federation and GitHub secrets
+  deploy-infrastructure:
+    name: Deploy Infrastructure with OpenTofu
+    needs: [ci]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/terraform-deploy.yml
+    secrets:
+      project_number: ${{ secrets.GCP_PROJECT_NUMBER }}
+      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+  # Uncomment when Artifact Registry exists and to start pushing images
   # affected-projects:
   #   name: Get affected projects
   #   runs-on: ubuntu-latest
@@ -172,13 +181,3 @@ jobs:
   #         docker tag ${{ matrix.paths }} $IMAGE_LATEST
   #         docker push $IMAGE_TAG
   #         docker push $IMAGE_LATEST
-
-  # Uncomment after setting up GCP Workload Identity Federation and GitHub secrets
-  # deploy-infrastructure:
-  #   name: Deploy Infrastructure with OpenTofu
-  #   needs: [ci, build-push-images]
-  #   if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
-  #   uses: ./.github/workflows/terraform-deploy.yml
-  #   secrets:
-  #     project_number: ${{ secrets.GCP_PROJECT_NUMBER }}
-  #     service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}

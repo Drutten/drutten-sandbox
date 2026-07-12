@@ -4,10 +4,10 @@ on:
   workflow_call:
     secrets:
       project_number:
-        description: 'Project ID'
+        description: 'GCP project number (for Workload Identity Federation)'
         required: true
       service_account:
-        description: 'Service account'
+        description: 'CI/CD service account email'
         required: true
 
 permissions:
@@ -20,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TERRAFORM_DIR: terraform
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+      TF_VAR_docker_image_path: ${{ vars.DOCKER_IMAGE_PATH }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
