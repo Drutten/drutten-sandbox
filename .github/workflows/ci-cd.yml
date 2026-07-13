@@ -133,19 +133,19 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
   
-      - name: Authenticate to GCP
+      - id: auth
+        name: Authenticate to GCP
         uses: google-github-actions/auth@v3
         with:
           token_format: access_token
           create_credentials_file: false
           workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          project_id: ${{ vars.GCP_PROJECT_ID }}
   
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v3
-  
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
+      - name: Docker login to Artifact Registry
+        run: |
+          echo '${{ steps.auth.outputs.access_token }}' | docker login -u oauth2accesstoken --password-stdin "https://${{ env.REGISTRY }}"
   
       - name: Build & Push Docker Image
         run: |
