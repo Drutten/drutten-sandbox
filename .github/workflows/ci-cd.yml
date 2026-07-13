@@ -95,8 +95,7 @@ jobs:
       - name: Get affected projects with docker-build target
         id: affected-projects
         run: |
-          # Always push images for all docker-build projects on main.
-          # "affected" can be empty depending on base/head calculation, which makes the pipeline green but produces no images.
+          # Push images for all docker-build projects on main.
           json_paths=$(pnpm nx show projects --with-target docker-build --json)
           echo "docker-build projects: $json_paths"
           echo "paths=$json_paths" >> $GITHUB_OUTPUT
