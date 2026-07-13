@@ -61,7 +61,6 @@ jobs:
       project_number: ${{ secrets.GCP_PROJECT_NUMBER }}
       service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-  Uncomment when Artifact Registry exists and to start pushing images
   affected-projects:
     name: Get affected projects
     runs-on: ubuntu-latest
