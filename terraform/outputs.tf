@@ -1,7 +1,14 @@
 output "cloud_run_urls" {
   description = "URLs of deployed Cloud Run services"
   value = {
-    for k, v in google_cloud_run_v2_service.services : k => v.uri
+    for k, v in module.cloud_run_services : k => v.url
+  }
+}
+
+output "cloud_run_service_accounts" {
+  description = "Runtime service account emails by service"
+  value = {
+    for k, v in google_service_account.service_runtime : k => v.email
   }
 }
 

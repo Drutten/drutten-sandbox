@@ -12,6 +12,11 @@ permissions:
   contents: read
   id-token: write
 
+# Run one deployment at a time to prevent concurrent updates to the latest image.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   ci:
     name: Lint, Test & Build
@@ -31,7 +36,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -48,62 +53,48 @@ jobs:
       - name: Run affected builds
         run: pnpm nx affected -t build
 
-  deploy-infrastructure:
-    name: Deploy Infrastructure with OpenTofu
-    needs: [ci]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ./.github/workflows/terraform-deploy.yml
-    with:
-      project_id: ${{ vars.GCP_PROJECT_ID }}
-      docker_image_path: ${{ vars.DOCKER_IMAGE_PATH }}
-      tfstate_bucket: ${{ vars.GCP_TFSTATE_BUCKET }}
-    secrets:
-      project_number: ${{ secrets.GCP_PROJECT_NUMBER }}
-      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
   affected-projects:
     name: Get affected projects
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       paths: ${{ steps.affected-projects.outputs.paths }}
-      short_sha: ${{ steps.set-short-sha.outputs.short_sha }}
+      git_sha: ${{ steps.set-git-sha.outputs.git_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-  
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 10
-  
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: "pnpm"
-  
+          cache: 'pnpm'
+
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
-  
+
       - name: Derive SHAs for Nx affected commands
         id: set-shas
         uses: nrwl/nx-set-shas@v5
-  
+
       - name: Get affected projects with docker-build target
         id: affected-projects
         run: |
-          # Push images for all docker-build projects on main.
-          json_paths=$(pnpm nx show projects --with-target docker-build --json)
+          json_paths=$(pnpm nx show projects --affected --with-target docker-build --json)
           echo "docker-build projects: $json_paths"
-          echo "paths=$json_paths" >> $GITHUB_OUTPUT
-  
-      - name: Set short SHA
-        id: set-short-sha
-        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
-  
+          echo "paths=$json_paths" >> "$GITHUB_OUTPUT"
+
+      - name: Set Git SHA
+        id: set-git-sha
+        run: echo "git_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   build-push-images:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
@@ -120,21 +111,21 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-  
+
       - name: Install pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 10
-  
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: "pnpm"
-  
+          cache: 'pnpm'
+
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
-  
+
       - id: auth
         name: Authenticate to GCP
         uses: google-github-actions/auth@v3
@@ -144,18 +135,38 @@ jobs:
           workload_identity_provider: projects/${{ secrets.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github/providers/github
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
           project_id: ${{ vars.GCP_PROJECT_ID }}
-  
+
       - name: Docker login to Artifact Registry
         run: |
           echo '${{ steps.auth.outputs.access_token }}' | docker login -u oauth2accesstoken --password-stdin "https://${{ env.REGISTRY }}"
-  
+
       - name: Build & Push Docker Image
         run: |
-          IMAGE_TAG="${{ env.DOCKER_IMAGE_PATH }}/${{ matrix.paths }}:${{ needs.affected-projects.outputs.short_sha }}"
+          IMAGE_TAG="${{ env.DOCKER_IMAGE_PATH }}/${{ matrix.paths }}:${{ needs.affected-projects.outputs.git_sha }}"
           IMAGE_LATEST="${{ env.DOCKER_IMAGE_PATH }}/${{ matrix.paths }}:latest"
-          
+
           pnpm nx run ${{ matrix.paths }}:docker-build
           docker tag ${{ matrix.paths }} $IMAGE_TAG
           docker tag ${{ matrix.paths }} $IMAGE_LATEST
           docker push $IMAGE_TAG
           docker push $IMAGE_LATEST
+
+  deploy-infrastructure:
+    name: Deploy Infrastructure with OpenTofu
+    needs: [ci, affected-projects, build-push-images]
+    # A documentation/infra-only change can produce an empty matrix. In that
+    # case the existing image tag is still valid and Terraform may safely run.
+    if: >-
+      always() &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      needs.ci.result == 'success' &&
+      needs.affected-projects.result == 'success' &&
+      (needs.build-push-images.result == 'success' || needs.build-push-images.result == 'skipped')
+    uses: ./.github/workflows/terraform-deploy.yml
+    with:
+      project_id: ${{ vars.GCP_PROJECT_ID }}
+      tfstate_bucket: ${{ vars.GCP_TFSTATE_BUCKET }}
+    secrets:
+      project_number: ${{ secrets.GCP_PROJECT_NUMBER }}
+      service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}

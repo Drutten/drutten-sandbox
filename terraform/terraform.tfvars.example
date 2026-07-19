@@ -2,23 +2,25 @@
 # Copy this to terraform.tfvars and fill in your values
 # terraform.tfvars is gitignored for security
 
-project_id        = "your-gcp-project-id"
-region            = "europe-west1"
-docker_image_path = "europe-west1-docker.pkg.dev/your-project-id/drutten-sandbox"
+project_id = "your-gcp-project-id"
+region     = "europe-west1"
 
-# Define your Cloud Run services here
-# Uncomment and customize when you're ready to deploy
+# The api service is enabled by default. Override services here to customize it
+# or add more deployable applications. CI moves each service's latest tag only
+# after a successful build; Terraform resolves that tag to an immutable digest.
 # services = {
-#   "my-api" = {
-#     image_name            = "my-api"
+#   "api" = {
+#     image_name            = "api"
+#     image_tag             = "latest"
 #     cpu                   = "1"
 #     memory                = "512Mi"
 #     max_instances         = 10
 #     min_instances         = 0
-#     allow_unauthenticated = true
+#     allow_unauthenticated = false
 #   }
-#   "my-worker" = {
-#     image_name            = "my-worker"
+#   "worker" = {
+#     image_name            = "worker"
+#     image_tag             = "latest"
 #     cpu                   = "2"
 #     memory                = "1Gi"
 #     max_instances         = 5

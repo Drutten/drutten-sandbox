@@ -7,10 +7,6 @@ on:
         description: 'GCP project ID'
         required: true
         type: string
-      docker_image_path:
-        description: 'Base path for Docker images in Artifact Registry'
-        required: true
-        type: string
       tfstate_bucket:
         description: 'GCS bucket for Terraform/OpenTofu state'
         required: true
@@ -34,7 +30,6 @@ jobs:
     env:
       TERRAFORM_DIR: terraform
       TF_VAR_project_id: ${{ inputs.project_id }}
-      TF_VAR_docker_image_path: ${{ inputs.docker_image_path }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
