@@ -19,6 +19,7 @@ variable "services" {
     max_instances         = optional(number, 10)
     min_instances         = optional(number, 0)
     allow_unauthenticated = optional(bool, true)
+    deletion_protection   = optional(bool, true)
   }))
   default  = null
   nullable = true

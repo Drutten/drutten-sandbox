@@ -7,6 +7,12 @@ resource "google_storage_bucket" "energy_uploads" {
   force_destroy               = false
 }
 
+# This data source also ensures that the Google-managed Storage service account
+# exists before Terraform grants it Pub/Sub access.
+data "google_storage_project_service_account" "gcs" {
+  project = var.project_id
+}
+
 resource "google_service_account" "eventarc_energy_ingestion" {
   account_id   = "sa-eventarc-energy-ingestion"
   display_name = "Eventarc identity for energy ingestion"
@@ -43,9 +49,7 @@ resource "google_storage_bucket_iam_member" "energy_ingestion_object_viewer" {
 resource "google_project_iam_member" "gcs_eventarc_publisher" {
   project = var.project_id
   role    = "roles/pubsub.publisher"
-  member  = "serviceAccount:service-${data.google_project.current.number}@gs-project-accounts.iam.gserviceaccount.com"
-
-  depends_on = [google_storage_bucket.energy_uploads]
+  member  = data.google_storage_project_service_account.gcs.member
 }
 
 resource "google_eventarc_trigger" "energy_file_uploaded" {

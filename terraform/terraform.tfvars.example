@@ -17,6 +17,7 @@ region     = "europe-west1"
 #     max_instances         = 10
 #     min_instances         = 0
 #     allow_unauthenticated = false
+#     deletion_protection   = true
 #   }
 #   "worker" = {
 #     image_name            = "worker"

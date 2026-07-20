@@ -76,6 +76,9 @@ only reference an image that already exists:
 
 The repository enables the `energy-ingestion` service by default. Its image is
 built and pushed before Terraform plans the Cloud Run and Eventarc resources.
+During the current rename migration, the legacy `api` service is retained for
+one successful apply so its deletion protection can be disabled safely. Remove
+that temporary entry from `locals.tf` in the following deployment.
 
 After this one-time bootstrap, a normal merge to `main` performs the image push
 and Cloud Run deployment in the same pipeline run. The image is pushed first,

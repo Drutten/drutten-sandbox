@@ -42,3 +42,8 @@ variable "allow_unauthenticated" {
   description = "Whether the service is publicly invokable"
   type        = bool
 }
+
+variable "deletion_protection" {
+  description = "Whether Terraform may delete the Cloud Run service"
+  type        = bool
+}
