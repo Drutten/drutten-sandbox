@@ -61,6 +61,10 @@ Each service also gets a dedicated runtime service account with no additional
 IAM roles by default. Grant permissions separately and on the narrowest useful
 resource only when an application needs them.
 
+The energy ingestion flow provisions a private upload bucket and an Eventarc
+trigger for finalized objects. Eventarc can invoke only `energy-ingestion`, and
+the service runtime identity can read objects only from that upload bucket.
+
 ## Bootstrap Order
 
 For an empty GCP project, deploy in two phases because a Cloud Run service can
@@ -70,8 +74,8 @@ only reference an image that already exists:
 2. Build and push the initial application image.
 3. Enable the service and apply again to create Cloud Run.
 
-The repository currently enables the `api` service by default because its image
-has already been pushed.
+The repository enables the `energy-ingestion` service by default. Its image is
+built and pushed before Terraform plans the Cloud Run and Eventarc resources.
 
 After this one-time bootstrap, a normal merge to `main` performs the image push
 and Cloud Run deployment in the same pipeline run. The image is pushed first,

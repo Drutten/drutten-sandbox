@@ -25,6 +25,8 @@ gcloud services enable \
   cloudresourcemanager.googleapis.com \
   sts.googleapis.com \
   artifactregistry.googleapis.com \
+  eventarc.googleapis.com \
+  pubsub.googleapis.com \
   run.googleapis.com \
   storage.googleapis.com
 ```
@@ -40,6 +42,9 @@ gcloud services enable \
   - `roles/run.admin` - Deploy Cloud Run services
   - `roles/artifactregistry.admin` - Push/pull Docker images
   - `roles/iam.serviceAccountUser` - Act as service account
+  - `roles/iam.serviceAccountAdmin` - Create application runtime identities
+  - `roles/eventarc.admin` - Manage Eventarc triggers
+  - `roles/resourcemanager.projectIamAdmin` - Manage the required project IAM bindings
   - `roles/storage.admin` - Terraform state (if using GCS backend)
 
 ---
@@ -77,6 +82,8 @@ gcloud services enable \
   cloudresourcemanager.googleapis.com \
   sts.googleapis.com \
   artifactregistry.googleapis.com \
+  eventarc.googleapis.com \
+  pubsub.googleapis.com \
   run.googleapis.com \
   storage.googleapis.com
 ```
@@ -121,6 +128,18 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/iam.serviceAccountUser"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountAdmin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/eventarc.admin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/resourcemanager.projectIamAdmin"
 
 # Allow GitHub to impersonate service account
 gcloud iam service-accounts add-iam-policy-binding \

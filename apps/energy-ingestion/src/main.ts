@@ -11,10 +11,9 @@ const server = createServer((req, res) => {
   }
 
   res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ message: 'Hello from api' }));
+  res.end(JSON.stringify({ message: 'Hello from energy-ingestion' }));
 });
 
 server.listen(port, host, () => {
-  console.log(`api listening on http://${host}:${port}`);
-  console.log('Hello from api');
+  console.log(`energy-ingestion listening on http://${host}:${port}`);
 });

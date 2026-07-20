@@ -1,9 +1,9 @@
 locals {
-  api_service_name = "api"
+  energy_ingestion_service_name = "energy-ingestion"
 
   default_services = {
-    (local.api_service_name) = {
-      image_name            = local.api_service_name
+    (local.energy_ingestion_service_name) = {
+      image_name            = local.energy_ingestion_service_name
       image_tag             = "latest"
       cpu                   = "1"
       memory                = "512Mi"
@@ -14,4 +14,6 @@ locals {
   }
 
   services = var.services == null ? local.default_services : var.services
+
+  energy_ingestion_enabled = contains(keys(local.services), local.energy_ingestion_service_name)
 }

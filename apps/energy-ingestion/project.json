@@ -1,7 +1,7 @@
 {
-  "name": "api",
+  "name": "energy-ingestion",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "apps/api/src",
+  "sourceRoot": "apps/energy-ingestion/src",
   "projectType": "application",
   "tags": [],
   "targets": {
@@ -11,12 +11,12 @@
       "defaultConfiguration": "production",
       "options": {
         "platform": "node",
-        "outputPath": "dist/apps/api",
+        "outputPath": "dist/apps/energy-ingestion",
         "format": ["cjs"],
         "bundle": true,
-        "main": "apps/api/src/main.ts",
-        "tsConfig": "apps/api/tsconfig.app.json",
-        "assets": ["apps/api/src/assets"]
+        "main": "apps/energy-ingestion/src/main.ts",
+        "tsConfig": "apps/energy-ingestion/tsconfig.app.json",
+        "assets": ["apps/energy-ingestion/src/assets"]
       },
       "configurations": {
         "development": {},
@@ -29,21 +29,21 @@
       "defaultConfiguration": "development",
       "dependsOn": ["build"],
       "options": {
-        "buildTarget": "api:build",
+        "buildTarget": "energy-ingestion:build",
         "runBuildTargetDependencies": false
       },
       "configurations": {
         "development": {
-          "buildTarget": "api:build:development"
+          "buildTarget": "energy-ingestion:build:development"
         },
         "production": {
-          "buildTarget": "api:build:production"
+          "buildTarget": "energy-ingestion:build:production"
         }
       }
     },
     "docker-build": {
       "dependsOn": ["build"],
-      "command": "docker build -f apps/api/Dockerfile . -t api"
+      "command": "docker build -f apps/energy-ingestion/Dockerfile . -t energy-ingestion"
     }
   }
 }

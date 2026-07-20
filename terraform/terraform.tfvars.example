@@ -5,12 +5,12 @@
 project_id = "your-gcp-project-id"
 region     = "europe-west1"
 
-# The api service is enabled by default. Override services here to customize it
+# The energy-ingestion service is enabled by default. Override services here to customize it
 # or add more deployable applications. CI moves each service's latest tag only
 # after a successful build; Terraform resolves that tag to an immutable digest.
 # services = {
-#   "api" = {
-#     image_name            = "api"
+#   "energy-ingestion" = {
+#     image_name            = "energy-ingestion"
 #     image_tag             = "latest"
 #     cpu                   = "1"
 #     memory                = "512Mi"
