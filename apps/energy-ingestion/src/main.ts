@@ -1,7 +1,9 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { Storage } from '@google-cloud/storage';
+import { parse } from 'csv-parse';
 
 const host = process.env.HOST ?? '0.0.0.0';
 const port = Number(process.env.PORT ?? 3000);
@@ -61,6 +63,7 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
+// Ensures a required GCS metadata field is a non-empty string.
 function requiredString(
   data: StorageObjectData,
   field: keyof StorageObjectData,
@@ -82,6 +85,26 @@ export function createImportId(
   return createHash('sha256')
     .update(`${bucket}\n${fileName}\n${generation}`)
     .digest('hex');
+}
+
+export async function parseCsvRows(contents: Buffer): Promise<number> {
+  const records = Readable.from(contents).pipe(
+    parse({
+      bom: true,
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    }),
+  );
+  let rowCount = 0;
+
+  // csv-parse exposes records as an async iterable, so only one row is
+  // processed at a time. Field validation will be added in the next step.
+  for await (const _record of records) {
+    rowCount += 1;
+  }
+
+  return rowCount;
 }
 
 async function handleStorageEvent(
@@ -138,9 +161,10 @@ async function handleStorageEvent(
       .bucket(bucket)
       .file(fileName, { generation })
       .download();
+    const rowCount = await parseCsvRows(contents);
 
     log('INFO', {
-      event: 'energy_import_received',
+      event: 'energy_import_parsed',
       eventId,
       eventType,
       importId,
@@ -148,16 +172,17 @@ async function handleStorageEvent(
       fileName,
       generation,
       sizeBytes: contents.length,
+      rowCount,
     });
 
-    respond(res, 200, { importId, status: 'received' });
+    respond(res, 200, { importId, status: 'parsed', rowCount });
   } catch (error) {
     log('ERROR', {
       event: 'energy_import_failed',
       eventId,
       reason: error instanceof Error ? error.message : String(error),
     });
-    respond(res, 500, { error: 'Failed to read uploaded file' });
+    respond(res, 500, { error: 'Failed to process uploaded file' });
   }
 }
 

@@ -52,6 +52,9 @@ importers:
       '@google-cloud/storage':
         specifier: ^7.21.0
         version: 7.21.0
+      csv-parse:
+        specifier: ^7.0.1
+        version: 7.0.1
 
 packages:
   '@babel/code-frame@7.27.1':
@@ -2744,6 +2747,12 @@ packages:
         integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==,
       }
     engines: {node: '>= 8'}
+
+  csv-parse@7.0.1:
+    resolution:
+      {
+        integrity: sha512-+2z7Ar0APQ7Uu6fX4cn+pitRmxjZ1WPBcGmZFKmA74FCyi7Et/XZx8cjNQ5CjbZ4HCOxXCOpRBYvYH08Qa003A==,
+      }
 
   debug@4.3.1:
     resolution:
@@ -6945,6 +6954,8 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
+
+  csv-parse@7.0.1: {}
 
   debug@4.3.1:
     dependencies:
