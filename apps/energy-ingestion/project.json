@@ -14,6 +14,7 @@
         "outputPath": "dist/apps/energy-ingestion",
         "format": ["cjs"],
         "bundle": true,
+        "thirdParty": true,
         "main": "apps/energy-ingestion/src/main.ts",
         "tsConfig": "apps/energy-ingestion/tsconfig.app.json",
         "assets": ["apps/energy-ingestion/src/assets"]

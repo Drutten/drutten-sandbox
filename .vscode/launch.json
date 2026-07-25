@@ -4,9 +4,9 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Debug api with Nx",
+      "name": "Debug energy-ingestion with Nx",
       "runtimeExecutable": "pnpm exec",
-      "runtimeArgs": ["nx", "serve", "api"],
+      "runtimeArgs": ["nx", "serve", "energy-ingestion"],
       "env": {
         "NODE_OPTIONS": "--inspect=9229"
       },
@@ -15,7 +15,7 @@
       "skipFiles": ["<node_internals>/**"],
       "sourceMaps": true,
       "outFiles": [
-        "${workspaceFolder}/dist/apps/api/**/*.(m|c|)js",
+        "${workspaceFolder}/dist/apps/energy-ingestion/**/*.(m|c|)js",
         "!**/node_modules/**"
       ]
     }
