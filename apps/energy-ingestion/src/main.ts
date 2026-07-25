@@ -1,9 +1,9 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { Storage } from '@google-cloud/storage';
 import { parse } from 'csv-parse';
+import { createImportId, createRecordId } from './identifiers.js';
 import {
   validateEnergyRow,
   type CsvRow,
@@ -81,16 +81,6 @@ function requiredString(
   return value;
 }
 
-export function createImportId(
-  bucket: string,
-  fileName: string,
-  generation: string,
-): string {
-  return createHash('sha256')
-    .update(`${bucket}\n${fileName}\n${generation}`)
-    .digest('hex');
-}
-
 interface InvalidCsvRow {
   rowNumber: number;
   errors: string[];
@@ -101,6 +91,7 @@ interface CsvValidationSummary {
   validRowCount: number;
   invalidRowCount: number;
   invalidRows: InvalidCsvRow[];
+  recordIds: string[];
 }
 
 export async function parseCsvRows(
@@ -117,6 +108,7 @@ export async function parseCsvRows(
   let rowCount = 0;
   let validRowCount = 0;
   const invalidRows: InvalidCsvRow[] = [];
+  const recordIds: string[] = [];
 
   for await (const record of records) {
     rowCount += 1;
@@ -124,6 +116,13 @@ export async function parseCsvRows(
 
     if (result.valid) {
       validRowCount += 1;
+      recordIds.push(
+        createRecordId(
+          record.meter_id ?? '',
+          record.period_start ?? '',
+          record.period_end ?? '',
+        ),
+      );
     } else {
       invalidRows.push({
         // The header is CSV row 1.
@@ -138,6 +137,7 @@ export async function parseCsvRows(
     validRowCount,
     invalidRowCount: invalidRows.length,
     invalidRows,
+    recordIds,
   };
 }
 
@@ -196,6 +196,7 @@ async function handleStorageEvent(
       .file(fileName, { generation })
       .download();
     const summary = await parseCsvRows(contents);
+    const { recordIds, ...validationSummary } = summary;
 
     log(summary.invalidRowCount === 0 ? 'INFO' : 'WARNING', {
       event: 'energy_import_validated',
@@ -206,7 +207,9 @@ async function handleStorageEvent(
       fileName,
       generation,
       sizeBytes: contents.length,
-      ...summary,
+      ...validationSummary,
+      recordIdSample: recordIds.slice(0, 10),
+      recordIdsTruncated: recordIds.length > 10,
     });
 
     respond(res, 200, {
