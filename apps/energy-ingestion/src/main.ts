@@ -4,6 +4,10 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { Storage } from '@google-cloud/storage';
 import { parse } from 'csv-parse';
+import {
+  validateEnergyRow,
+  type CsvRow,
+} from './validate-energy-row.js';
 
 const host = process.env.HOST ?? '0.0.0.0';
 const port = Number(process.env.PORT ?? 3000);
@@ -87,7 +91,21 @@ export function createImportId(
     .digest('hex');
 }
 
-export async function parseCsvRows(contents: Buffer): Promise<number> {
+interface InvalidCsvRow {
+  rowNumber: number;
+  errors: string[];
+}
+
+interface CsvValidationSummary {
+  rowCount: number;
+  validRowCount: number;
+  invalidRowCount: number;
+  invalidRows: InvalidCsvRow[];
+}
+
+export async function parseCsvRows(
+  contents: Buffer,
+): Promise<CsvValidationSummary> {
   const records = Readable.from(contents).pipe(
     parse({
       bom: true,
@@ -97,14 +115,30 @@ export async function parseCsvRows(contents: Buffer): Promise<number> {
     }),
   );
   let rowCount = 0;
+  let validRowCount = 0;
+  const invalidRows: InvalidCsvRow[] = [];
 
-  // csv-parse exposes records as an async iterable, so only one row is
-  // processed at a time. Field validation will be added in the next step.
-  for await (const _record of records) {
+  for await (const record of records) {
     rowCount += 1;
+    const result = validateEnergyRow(record as CsvRow);
+
+    if (result.valid) {
+      validRowCount += 1;
+    } else {
+      invalidRows.push({
+        // The header is CSV row 1.
+        rowNumber: rowCount + 1,
+        errors: result.errors,
+      });
+    }
   }
 
-  return rowCount;
+  return {
+    rowCount,
+    validRowCount,
+    invalidRowCount: invalidRows.length,
+    invalidRows,
+  };
 }
 
 async function handleStorageEvent(
@@ -161,10 +195,10 @@ async function handleStorageEvent(
       .bucket(bucket)
       .file(fileName, { generation })
       .download();
-    const rowCount = await parseCsvRows(contents);
+    const summary = await parseCsvRows(contents);
 
-    log('INFO', {
-      event: 'energy_import_parsed',
+    log(summary.invalidRowCount === 0 ? 'INFO' : 'WARNING', {
+      event: 'energy_import_validated',
       eventId,
       eventType,
       importId,
@@ -172,10 +206,16 @@ async function handleStorageEvent(
       fileName,
       generation,
       sizeBytes: contents.length,
-      rowCount,
+      ...summary,
     });
 
-    respond(res, 200, { importId, status: 'parsed', rowCount });
+    respond(res, 200, {
+      importId,
+      status: 'validated',
+      rowCount: summary.rowCount,
+      validRowCount: summary.validRowCount,
+      invalidRowCount: summary.invalidRowCount,
+    });
   } catch (error) {
     log('ERROR', {
       event: 'energy_import_failed',
