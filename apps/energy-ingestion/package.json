@@ -2,5 +2,7 @@
   "name": "energy-ingestion",
   "version": "0.0.1",
   "private": true,
-  "dependencies": {}
+  "dependencies": {
+    "@google-cloud/storage": "^7.21.0"
+  }
 }
