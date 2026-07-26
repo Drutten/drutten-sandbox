@@ -25,6 +25,7 @@ gcloud services enable \
   cloudresourcemanager.googleapis.com \
   sts.googleapis.com \
   artifactregistry.googleapis.com \
+  bigquery.googleapis.com \
   eventarc.googleapis.com \
   pubsub.googleapis.com \
   run.googleapis.com \
@@ -41,6 +42,7 @@ gcloud services enable \
 - Required roles for this setup:
   - `roles/run.admin` - Deploy Cloud Run services
   - `roles/artifactregistry.admin` - Push/pull Docker images
+  - `roles/bigquery.admin` - Manage BigQuery datasets, tables, and their IAM policies
   - `roles/iam.serviceAccountUser` - Act as service account
   - `roles/iam.serviceAccountAdmin` - Create application runtime identities
   - `roles/eventarc.admin` - Manage Eventarc triggers
@@ -82,6 +84,7 @@ gcloud services enable \
   cloudresourcemanager.googleapis.com \
   sts.googleapis.com \
   artifactregistry.googleapis.com \
+  bigquery.googleapis.com \
   eventarc.googleapis.com \
   pubsub.googleapis.com \
   run.googleapis.com \
@@ -124,6 +127,10 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/artifactregistry.admin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/bigquery.admin"
 
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \

@@ -21,3 +21,8 @@ output "energy_upload_bucket" {
   description = "Bucket that receives energy CSV files"
   value       = google_storage_bucket.energy_uploads.name
 }
+
+output "energy_bigquery_dataset" {
+  description = "BigQuery dataset for the energy domain"
+  value       = google_bigquery_dataset.energy.dataset_id
+}

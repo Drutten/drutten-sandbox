@@ -9,6 +9,7 @@ This directory contains Terraform/OpenTofu configuration for managing all GCP in
 - `outputs.tf` - Output values
 - `artifact_registry.tf` - Docker image registry
 - `cloud_run.tf` - Cloud Run service definitions
+- `energy_bigquery.tf` - Energy dataset, tables, and runtime IAM
 - `terraform.tfvars.example` - Example configuration file
 
 ## Setup
@@ -64,6 +65,16 @@ resource only when an application needs them.
 The energy ingestion flow provisions a private upload bucket and an Eventarc
 trigger for finalized objects. Eventarc can invoke only `energy-ingestion`, and
 the service runtime identity can read objects only from that upload bucket.
+
+The `energy` BigQuery dataset contains:
+
+- `import_runs` for file-level lifecycle and status
+- `energy_records_staging` for validated rows awaiting processing
+- `energy_records` for curated analytics data
+- `validation_errors` for searchable row-level data errors
+
+The ingestion runtime can edit only the three tables it owns: import runs,
+staging, and validation errors.
 
 ## Bootstrap Order
 
