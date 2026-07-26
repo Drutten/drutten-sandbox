@@ -12,6 +12,18 @@ export interface InvalidCsvRow {
   rawRow?: string;
 }
 
+export interface CsvRowHandlers {
+  onValidRow?: (
+    row: CsvRow,
+    rowNumber: number,
+    recordId: string,
+  ) => Promise<void>;
+  onInvalidRow?: (
+    invalidRow: InvalidCsvRow,
+    parsedRow: CsvRow,
+  ) => Promise<void>;
+}
+
 export interface CsvValidationSummary {
   rowCount: number;
   validRowCount: number;
@@ -42,6 +54,7 @@ export class InvalidCsvFileError extends Error {
 
 export async function parseCsvRows(
   contents: Readable,
+  handlers: CsvRowHandlers = {},
 ): Promise<CsvValidationSummary> {
   const parser = parse({
     bom: true,
@@ -69,11 +82,13 @@ export async function parseCsvRows(
 
       if (parsed.info.error?.code === 'CSV_RECORD_INCONSISTENT_COLUMNS') {
         invalidRowCount += 1;
-        addInvalidRowSample(invalidRowSample, {
+        const invalidRow = {
           rowNumber: parsed.info.lines,
           errors: [invalidColumnCountError],
           rawRow: parsed.raw.replace(/\r?\n$/, ''),
-        });
+        };
+        addInvalidRowSample(invalidRowSample, invalidRow);
+        await handlers.onInvalidRow?.(invalidRow, parsed.record);
         continue;
       }
 
@@ -81,22 +96,28 @@ export async function parseCsvRows(
 
       if (result.valid) {
         validRowCount += 1;
+        const recordId = createRecordId(
+          parsed.record.meter_id ?? '',
+          parsed.record.period_start ?? '',
+          parsed.record.period_end ?? '',
+        );
         if (recordIdSample.length < summarySampleSize) {
-          recordIdSample.push(
-            createRecordId(
-              parsed.record.meter_id ?? '',
-              parsed.record.period_start ?? '',
-              parsed.record.period_end ?? '',
-            ),
-          );
+          recordIdSample.push(recordId);
         }
+        await handlers.onValidRow?.(
+          parsed.record,
+          parsed.info.lines,
+          recordId,
+        );
       } else {
         invalidRowCount += 1;
-        addInvalidRowSample(invalidRowSample, {
+        const invalidRow = {
           rowNumber: parsed.info.lines,
           errors: result.errors,
           rawRow: parsed.raw.replace(/\r?\n$/, ''),
-        });
+        };
+        addInvalidRowSample(invalidRowSample, invalidRow);
+        await handlers.onInvalidRow?.(invalidRow, parsed.record);
       }
     }
   } catch (error) {

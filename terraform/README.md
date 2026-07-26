@@ -10,6 +10,7 @@ This directory contains Terraform/OpenTofu configuration for managing all GCP in
 - `artifact_registry.tf` - Docker image registry
 - `cloud_run.tf` - Cloud Run service definitions
 - `energy_bigquery.tf` - Energy dataset, tables, and runtime IAM
+- `energy_firestore.tf` - Firestore import state and runtime IAM
 - `terraform.tfvars.example` - Example configuration file
 
 ## Setup
@@ -68,13 +69,13 @@ the service runtime identity can read objects only from that upload bucket.
 
 The `energy` BigQuery dataset contains:
 
-- `import_runs` for file-level lifecycle and status
 - `energy_records_staging` for validated rows awaiting processing
 - `energy_records` for curated analytics data
 - `validation_errors` for searchable row-level data errors
 
-The ingestion runtime can edit only the three tables it owns: import runs,
-staging, and validation errors.
+The ingestion runtime can edit only staging and validation errors. Firestore
+stores import lifecycle state in `importRuns` documents and uses transactions
+to coordinate retries and concurrent event deliveries.
 
 ## Bootstrap Order
 

@@ -13,6 +13,8 @@ locals {
       deletion_protection   = true
       environment_variables = {
         MAX_CSV_FILE_SIZE_BYTES = "10485760" # 10 MiB
+        ENERGY_DATASET_ID       = "energy"
+        GCP_REGION              = var.region
       }
     }
   }

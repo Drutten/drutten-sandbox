@@ -1,7 +1,23 @@
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { BigQuery } from '@google-cloud/bigquery';
+import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
+import {
+  BatchedBigQueryLoader,
+  BigQueryOutputError,
+  stagingSchema,
+  toStagingRow,
+  toValidationErrorRows,
+  validationErrorsSchema,
+} from './bigquery-loaders.js';
 import { createImportId } from './identifiers.js';
+import {
+  ImportRunStore,
+  type ClaimedImport,
+  type ImportIdentity,
+} from './import-run-store.js';
 import {
   InvalidCsvFileError,
   parseCsvRows,
@@ -10,7 +26,11 @@ import {
 const host = process.env.HOST ?? '0.0.0.0';
 const port = Number(process.env.PORT ?? 3000);
 const storage = new Storage();
+const bigquery = new BigQuery();
+const importRunStore = new ImportRunStore(new Firestore());
 const storageFinalizedEvent = 'google.cloud.storage.object.v1.finalized';
+const region = requiredEnvironmentVariable('GCP_REGION');
+const energyDatasetId = requiredEnvironmentVariable('ENERGY_DATASET_ID');
 // Limits the Eventarc metadata body, not the CSV file downloaded from GCS.
 const maxEventBodyBytes = 1024 * 1024;
 const maxCsvFileSizeBytes = positiveIntegerEnvironmentVariable(
@@ -38,6 +58,12 @@ function positiveIntegerEnvironmentVariable(name: string): number {
   }
 
   return parsed;
+}
+
+function requiredEnvironmentVariable(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} must be set`);
+  return value;
 }
 
 function respond(
@@ -128,6 +154,10 @@ async function handleStorageEvent(
   let data: StorageObjectData;
 
   let importId: string | undefined;
+  let identity: ImportIdentity | undefined;
+  let claim: ClaimedImport | undefined;
+  let stagingLoader: BatchedBigQueryLoader | undefined;
+  let validationErrorsLoader: BatchedBigQueryLoader | undefined;
 
   try {
     const body = await readJsonBody(req);
@@ -151,6 +181,14 @@ async function handleStorageEvent(
     const generation = requiredString(data, 'generation');
     const sizeBytes = requiredSizeBytes(data);
     importId = createImportId(bucket, fileName, generation);
+    identity = {
+      importId,
+      eventId,
+      bucketName: bucket,
+      objectName: fileName,
+      objectGeneration: generation,
+      sizeBytes,
+    };
 
     if (!fileName.toLowerCase().endsWith('.csv')) {
       log('INFO', {
@@ -167,6 +205,7 @@ async function handleStorageEvent(
     }
 
     if (sizeBytes > maxCsvFileSizeBytes) {
+      await importRunStore.markRejected(identity, 'FILE_TOO_LARGE');
       log('WARNING', {
         event: 'energy_import_rejected',
         eventId,
@@ -187,14 +226,102 @@ async function handleStorageEvent(
       return;
     }
 
+    const claimResult = await importRunStore.claim(identity, randomUUID());
+    if (claimResult.kind === 'already-finished') {
+      log('INFO', {
+        event: 'energy_import_already_finished',
+        eventId,
+        importId,
+        status: claimResult.status,
+      });
+      respond(res, 200, {
+        importId,
+        status: claimResult.status,
+      });
+      return;
+    }
+    if (claimResult.kind === 'in-progress') {
+      log('WARNING', {
+        event: 'energy_import_already_processing',
+        eventId,
+        importId,
+      });
+      respond(res, 503, {
+        importId,
+        status: 'PROCESSING',
+      });
+      return;
+    }
+    claim = claimResult;
+
+    const dataset = bigquery.dataset(energyDatasetId, { location: region });
+    stagingLoader = new BatchedBigQueryLoader(
+      bigquery,
+      dataset.table('energy_records_staging'),
+      region,
+      'staging',
+      claim.stagingJobId,
+      stagingSchema,
+      claim.stagingAlreadySucceeded,
+    );
+    validationErrorsLoader = new BatchedBigQueryLoader(
+      bigquery,
+      dataset.table('validation_errors'),
+      region,
+      'validationErrors',
+      claim.validationErrorsJobId,
+      validationErrorsSchema,
+      claim.validationErrorsAlreadySucceeded,
+    );
+    const processingTimestamp = new Date().toISOString();
     const contents = storage
       .bucket(bucket)
       .file(fileName, { generation })
       .createReadStream();
-    const summary = await parseCsvRows(contents);
+    const summary = await parseCsvRows(contents, {
+      onValidRow: async (row, rowNumber, recordId) => {
+        await stagingLoader!.addRow(
+          toStagingRow(
+            row,
+            rowNumber,
+            recordId,
+            importId!,
+            processingTimestamp,
+          ),
+        );
+      },
+      onInvalidRow: async (invalidRow, parsedRow) => {
+        for (const errorRow of toValidationErrorRows(
+          invalidRow,
+          parsedRow,
+          importId!,
+          processingTimestamp,
+        )) {
+          await validationErrorsLoader!.addRow(errorRow);
+        }
+      },
+    });
+
+    await stagingLoader.finalize();
+    await importRunStore.markOutputSucceeded(
+      importId,
+      claim.ownerId,
+      'staging',
+    );
+    await validationErrorsLoader.finalize();
+    await importRunStore.markOutputSucceeded(
+      importId,
+      claim.ownerId,
+      'validationErrors',
+    );
+    await importRunStore.markStaged(importId, claim.ownerId, {
+      rowCount: summary.rowCount,
+      validRowCount: summary.validRowCount,
+      invalidRowCount: summary.invalidRowCount,
+    });
 
     log(summary.invalidRowCount === 0 ? 'INFO' : 'WARNING', {
-      event: 'energy_import_validated',
+      event: 'energy_import_staged',
       eventId,
       eventType,
       importId,
@@ -202,18 +329,56 @@ async function handleStorageEvent(
       fileName,
       generation,
       sizeBytes,
+      attemptNumber: claim.attemptNumber,
+      stagingJobId: claim.stagingJobId,
+      validationErrorsJobId: claim.validationErrorsJobId,
       ...summary,
     });
 
     respond(res, 200, {
       importId,
-      status: 'validated',
+      status: 'STAGED',
       rowCount: summary.rowCount,
       validRowCount: summary.validRowCount,
       invalidRowCount: summary.invalidRowCount,
     });
   } catch (error) {
+    const caughtError =
+      error instanceof Error ? error : new Error(String(error));
+    stagingLoader?.abort(caughtError);
+    validationErrorsLoader?.abort(caughtError);
+
     if (error instanceof InvalidCsvFileError) {
+      if (!identity || !claim) {
+        log('ERROR', {
+          event: 'energy_import_state_update_failed',
+          eventId,
+          importId,
+          reason: 'Missing claimed import identity',
+        });
+        respond(res, 500, { error: 'Failed to update import state' });
+        return;
+      }
+      try {
+        await importRunStore.markRejected(
+          identity,
+          'INVALID_CSV',
+          error.message,
+          claim.ownerId,
+        );
+      } catch (stateError) {
+        log('ERROR', {
+          event: 'energy_import_state_update_failed',
+          eventId,
+          importId,
+          reason:
+            stateError instanceof Error
+              ? stateError.message
+              : String(stateError),
+        });
+        respond(res, 500, { error: 'Failed to update import state' });
+        return;
+      }
       log('WARNING', {
         event: 'energy_import_rejected',
         eventId,
@@ -229,10 +394,35 @@ async function handleStorageEvent(
       return;
     }
 
+    if (importId && claim) {
+      try {
+        await importRunStore.markTechnicalFailure(
+          importId,
+          claim.ownerId,
+          caughtError.message,
+          error instanceof BigQueryOutputError &&
+            error.retryWithNewJobId
+            ? error.output
+            : undefined,
+        );
+      } catch (stateError) {
+        log('ERROR', {
+          event: 'energy_import_state_update_failed',
+          eventId,
+          importId,
+          reason:
+            stateError instanceof Error
+              ? stateError.message
+              : String(stateError),
+        });
+      }
+    }
+
     log('ERROR', {
       event: 'energy_import_failed',
       eventId,
-      reason: error instanceof Error ? error.message : String(error),
+      importId,
+      reason: caughtError.message,
     });
     respond(res, 500, { error: 'Failed to process uploaded file' });
   }

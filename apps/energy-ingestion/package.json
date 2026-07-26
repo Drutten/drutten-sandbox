@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@google-cloud/bigquery": "^8.3.1",
+    "@google-cloud/firestore": "^8.7.0",
     "@google-cloud/storage": "^7.21.0",
     "csv-parse": "^7.0.1"
   }
