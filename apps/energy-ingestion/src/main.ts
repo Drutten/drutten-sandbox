@@ -1,13 +1,11 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { Readable } from 'node:stream';
 import { Storage } from '@google-cloud/storage';
-import { parse } from 'csv-parse';
-import { createImportId, createRecordId } from './identifiers.js';
+import { createImportId } from './identifiers.js';
 import {
-  validateEnergyRow,
-  type CsvRow,
-} from './validate-energy-row.js';
+  InvalidCsvFileError,
+  parseCsvRows,
+} from './parse-csv-rows.js';
 
 const host = process.env.HOST ?? '0.0.0.0';
 const port = Number(process.env.PORT ?? 3000);
@@ -115,87 +113,6 @@ function requiredSizeBytes(data: StorageObjectData): number {
   return parsed;
 }
 
-interface InvalidCsvRow {
-  rowNumber: number;
-  errors: string[];
-}
-
-interface CsvValidationSummary {
-  rowCount: number;
-  validRowCount: number;
-  invalidRowCount: number;
-  invalidRowSample: InvalidCsvRow[];
-  invalidRowsTruncated: boolean;
-  recordIdSample: string[];
-  recordIdsTruncated: boolean;
-}
-
-const summarySampleSize = 10;
-
-export async function parseCsvRows(
-  contents: Readable,
-): Promise<CsvValidationSummary> {
-  const parser = parse({
-    bom: true,
-    columns: true,
-    skip_empty_lines: true,
-    trim: true,
-  });
-  const forwardSourceError = (error: Error): void => {
-    parser.destroy(error);
-  };
-  contents.once('error', forwardSourceError);
-  const records = contents.pipe(parser);
-  let rowCount = 0;
-  let validRowCount = 0;
-  let invalidRowCount = 0;
-  const invalidRowSample: InvalidCsvRow[] = [];
-  const recordIdSample: string[] = [];
-
-  try {
-    for await (const record of records) {
-      rowCount += 1;
-      const result = validateEnergyRow(record as CsvRow);
-
-      if (result.valid) {
-        validRowCount += 1;
-        if (recordIdSample.length < summarySampleSize) {
-          recordIdSample.push(
-            createRecordId(
-              record.meter_id ?? '',
-              record.period_start ?? '',
-              record.period_end ?? '',
-            ),
-          );
-        }
-      } else {
-        invalidRowCount += 1;
-        if (invalidRowSample.length < summarySampleSize) {
-          invalidRowSample.push({
-            // The header is CSV row 1.
-            rowNumber: rowCount + 1,
-            errors: result.errors,
-          });
-        }
-      }
-    }
-  } finally {
-    contents.off('error', forwardSourceError);
-    if (!contents.destroyed) contents.destroy();
-    if (!parser.destroyed) parser.destroy();
-  }
-
-  return {
-    rowCount,
-    validRowCount,
-    invalidRowCount,
-    invalidRowSample,
-    invalidRowsTruncated: invalidRowCount > invalidRowSample.length,
-    recordIdSample,
-    recordIdsTruncated: validRowCount > recordIdSample.length,
-  };
-}
-
 async function handleStorageEvent(
   req: IncomingMessage,
   res: ServerResponse,
@@ -209,6 +126,8 @@ async function handleStorageEvent(
   }
 
   let data: StorageObjectData;
+
+  let importId: string | undefined;
 
   try {
     const body = await readJsonBody(req);
@@ -231,7 +150,7 @@ async function handleStorageEvent(
     const fileName = requiredString(data, 'name');
     const generation = requiredString(data, 'generation');
     const sizeBytes = requiredSizeBytes(data);
-    const importId = createImportId(bucket, fileName, generation);
+    importId = createImportId(bucket, fileName, generation);
 
     if (!fileName.toLowerCase().endsWith('.csv')) {
       log('INFO', {
@@ -294,6 +213,22 @@ async function handleStorageEvent(
       invalidRowCount: summary.invalidRowCount,
     });
   } catch (error) {
+    if (error instanceof InvalidCsvFileError) {
+      log('WARNING', {
+        event: 'energy_import_rejected',
+        eventId,
+        importId,
+        reason: 'INVALID_CSV',
+        details: error.message,
+      });
+      respond(res, 200, {
+        importId,
+        status: 'rejected',
+        reason: 'INVALID_CSV',
+      });
+      return;
+    }
+
     log('ERROR', {
       event: 'energy_import_failed',
       eventId,
