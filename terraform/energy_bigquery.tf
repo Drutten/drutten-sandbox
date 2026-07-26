@@ -22,10 +22,12 @@ resource "google_bigquery_dataset" "energy" {
 }
 
 resource "google_bigquery_table" "import_runs" {
-  dataset_id          = google_bigquery_dataset.energy.dataset_id
-  table_id            = "import_runs"
-  description         = "Tracks each uploaded CSV file through the ingestion flow"
-  deletion_protection = true
+  dataset_id  = google_bigquery_dataset.energy.dataset_id
+  table_id    = "import_runs"
+  description = "Tracks each uploaded CSV file through the ingestion flow"
+  # Migration step: disable protection before this table is replaced by
+  # Firestore and removed in a later deployment.
+  deletion_protection = false
 
   time_partitioning {
     type  = "DAY"

@@ -26,3 +26,8 @@ output "energy_bigquery_dataset" {
   description = "BigQuery dataset for the energy domain"
   value       = google_bigquery_dataset.energy.dataset_id
 }
+
+output "energy_import_firestore_database" {
+  description = "Firestore database used for import workflow state"
+  value       = google_firestore_database.energy_import_control.name
+}
