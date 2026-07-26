@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { Readable } from 'node:stream';
+import type { Readable } from 'node:stream';
 import { Storage } from '@google-cloud/storage';
 import { parse } from 'csv-parse';
 import { createImportId, createRecordId } from './identifiers.js';
@@ -124,54 +124,75 @@ interface CsvValidationSummary {
   rowCount: number;
   validRowCount: number;
   invalidRowCount: number;
-  invalidRows: InvalidCsvRow[];
-  recordIds: string[];
+  invalidRowSample: InvalidCsvRow[];
+  invalidRowsTruncated: boolean;
+  recordIdSample: string[];
+  recordIdsTruncated: boolean;
 }
 
+const summarySampleSize = 10;
+
 export async function parseCsvRows(
-  contents: Buffer,
+  contents: Readable,
 ): Promise<CsvValidationSummary> {
-  const records = Readable.from(contents).pipe(
-    parse({
-      bom: true,
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-    }),
-  );
+  const parser = parse({
+    bom: true,
+    columns: true,
+    skip_empty_lines: true,
+    trim: true,
+  });
+  const forwardSourceError = (error: Error): void => {
+    parser.destroy(error);
+  };
+  contents.once('error', forwardSourceError);
+  const records = contents.pipe(parser);
   let rowCount = 0;
   let validRowCount = 0;
-  const invalidRows: InvalidCsvRow[] = [];
-  const recordIds: string[] = [];
+  let invalidRowCount = 0;
+  const invalidRowSample: InvalidCsvRow[] = [];
+  const recordIdSample: string[] = [];
 
-  for await (const record of records) {
-    rowCount += 1;
-    const result = validateEnergyRow(record as CsvRow);
+  try {
+    for await (const record of records) {
+      rowCount += 1;
+      const result = validateEnergyRow(record as CsvRow);
 
-    if (result.valid) {
-      validRowCount += 1;
-      recordIds.push(
-        createRecordId(
-          record.meter_id ?? '',
-          record.period_start ?? '',
-          record.period_end ?? '',
-        ),
-      );
-    } else {
-      invalidRows.push({
-        // The header is CSV row 1.
-        rowNumber: rowCount + 1,
-        errors: result.errors,
-      });
+      if (result.valid) {
+        validRowCount += 1;
+        if (recordIdSample.length < summarySampleSize) {
+          recordIdSample.push(
+            createRecordId(
+              record.meter_id ?? '',
+              record.period_start ?? '',
+              record.period_end ?? '',
+            ),
+          );
+        }
+      } else {
+        invalidRowCount += 1;
+        if (invalidRowSample.length < summarySampleSize) {
+          invalidRowSample.push({
+            // The header is CSV row 1.
+            rowNumber: rowCount + 1,
+            errors: result.errors,
+          });
+        }
+      }
     }
+  } finally {
+    contents.off('error', forwardSourceError);
+    if (!contents.destroyed) contents.destroy();
+    if (!parser.destroyed) parser.destroy();
   }
 
   return {
     rowCount,
     validRowCount,
-    invalidRowCount: invalidRows.length,
-    invalidRows,
-    recordIds,
+    invalidRowCount,
+    invalidRowSample,
+    invalidRowsTruncated: invalidRowCount > invalidRowSample.length,
+    recordIdSample,
+    recordIdsTruncated: validRowCount > recordIdSample.length,
   };
 }
 
@@ -247,12 +268,11 @@ async function handleStorageEvent(
       return;
     }
 
-    const [contents] = await storage
+    const contents = storage
       .bucket(bucket)
       .file(fileName, { generation })
-      .download();
+      .createReadStream();
     const summary = await parseCsvRows(contents);
-    const { recordIds, ...validationSummary } = summary;
 
     log(summary.invalidRowCount === 0 ? 'INFO' : 'WARNING', {
       event: 'energy_import_validated',
@@ -263,9 +283,7 @@ async function handleStorageEvent(
       fileName,
       generation,
       sizeBytes,
-      ...validationSummary,
-      recordIdSample: recordIds.slice(0, 10),
-      recordIdsTruncated: recordIds.length > 10,
+      ...summary,
     });
 
     respond(res, 200, {
