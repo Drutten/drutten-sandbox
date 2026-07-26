@@ -2,7 +2,6 @@ locals {
   energy_dataset_id = "energy"
 
   energy_ingestion_table_ids = toset([
-    "import_runs",
     "energy_records_staging",
     "validation_errors",
   ])
@@ -19,38 +18,6 @@ resource "google_bigquery_dataset" "energy" {
     domain     = "energy"
     managed_by = "terraform"
   }
-}
-
-resource "google_bigquery_table" "import_runs" {
-  dataset_id  = google_bigquery_dataset.energy.dataset_id
-  table_id    = "import_runs"
-  description = "Tracks each uploaded CSV file through the ingestion flow"
-  # Migration step: disable protection before this table is replaced by
-  # Firestore and removed in a later deployment.
-  deletion_protection = false
-
-  time_partitioning {
-    type  = "DAY"
-    field = "received_at"
-  }
-
-  clustering = ["status", "object_name"]
-
-  schema = jsonencode([
-    { name = "import_id", type = "STRING", mode = "REQUIRED", description = "Deterministic ID for one GCS object generation" },
-    { name = "event_id", type = "STRING", mode = "REQUIRED", description = "CloudEvent delivery ID" },
-    { name = "bucket_name", type = "STRING", mode = "REQUIRED" },
-    { name = "object_name", type = "STRING", mode = "REQUIRED" },
-    { name = "object_generation", type = "STRING", mode = "REQUIRED" },
-    { name = "status", type = "STRING", mode = "REQUIRED", description = "Current import lifecycle status" },
-    { name = "row_count", type = "INT64", mode = "NULLABLE" },
-    { name = "valid_row_count", type = "INT64", mode = "NULLABLE" },
-    { name = "invalid_row_count", type = "INT64", mode = "NULLABLE" },
-    { name = "received_at", type = "TIMESTAMP", mode = "REQUIRED" },
-    { name = "completed_at", type = "TIMESTAMP", mode = "NULLABLE" },
-    { name = "updated_at", type = "TIMESTAMP", mode = "REQUIRED" },
-    { name = "technical_error", type = "STRING", mode = "NULLABLE" },
-  ])
 }
 
 resource "google_bigquery_table" "energy_records_staging" {
@@ -170,7 +137,6 @@ resource "google_bigquery_table_iam_member" "energy_ingestion_data_editor" {
   member     = google_service_account.service_runtime[local.energy_ingestion_service_name].member
 
   depends_on = [
-    google_bigquery_table.import_runs,
     google_bigquery_table.energy_records_staging,
     google_bigquery_table.validation_errors,
   ]
