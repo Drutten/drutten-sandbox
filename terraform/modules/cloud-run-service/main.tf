@@ -15,6 +15,15 @@ resource "google_cloud_run_v2_service" "this" {
     containers {
       image = var.image
 
+      dynamic "env" {
+        for_each = var.environment_variables
+
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+
       resources {
         limits = {
           cpu    = var.cpu

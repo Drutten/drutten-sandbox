@@ -47,3 +47,9 @@ variable "deletion_protection" {
   description = "Whether Terraform may delete the Cloud Run service"
   type        = bool
 }
+
+variable "environment_variables" {
+  description = "Plain-text environment variables for the container"
+  type        = map(string)
+  default     = {}
+}

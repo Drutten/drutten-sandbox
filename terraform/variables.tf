@@ -20,6 +20,7 @@ variable "services" {
     min_instances         = optional(number, 0)
     allow_unauthenticated = optional(bool, true)
     deletion_protection   = optional(bool, true)
+    environment_variables = optional(map(string), {})
   }))
   default  = null
   nullable = true

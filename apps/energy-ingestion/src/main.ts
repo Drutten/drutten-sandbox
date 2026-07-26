@@ -15,11 +15,31 @@ const storage = new Storage();
 const storageFinalizedEvent = 'google.cloud.storage.object.v1.finalized';
 // Limits the Eventarc metadata body, not the CSV file downloaded from GCS.
 const maxEventBodyBytes = 1024 * 1024;
+const maxCsvFileSizeBytes = positiveIntegerEnvironmentVariable(
+  'MAX_CSV_FILE_SIZE_BYTES',
+);
 
 interface StorageObjectData {
   bucket?: unknown;
   name?: unknown;
   generation?: unknown;
+  size?: unknown;
+}
+
+function positiveIntegerEnvironmentVariable(name: string): number {
+  const value = process.env[name];
+  const parsed = Number(value);
+
+  if (
+    value === undefined ||
+    value.length === 0 ||
+    !Number.isSafeInteger(parsed) ||
+    parsed <= 0
+  ) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+
+  return parsed;
 }
 
 function respond(
@@ -79,6 +99,20 @@ function requiredString(
   }
 
   return value;
+}
+
+function requiredSizeBytes(data: StorageObjectData): number {
+  const parsed = Number(data.size);
+
+  if (
+    (typeof data.size !== 'string' && typeof data.size !== 'number') ||
+    !Number.isSafeInteger(parsed) ||
+    parsed < 0
+  ) {
+    throw new Error('Missing or invalid Storage event field: size');
+  }
+
+  return parsed;
 }
 
 interface InvalidCsvRow {
@@ -175,6 +209,7 @@ async function handleStorageEvent(
     const bucket = requiredString(data, 'bucket');
     const fileName = requiredString(data, 'name');
     const generation = requiredString(data, 'generation');
+    const sizeBytes = requiredSizeBytes(data);
     const importId = createImportId(bucket, fileName, generation);
 
     if (!fileName.toLowerCase().endsWith('.csv')) {
@@ -188,6 +223,27 @@ async function handleStorageEvent(
         reason: 'File is not a CSV',
       });
       respond(res, 204);
+      return;
+    }
+
+    if (sizeBytes > maxCsvFileSizeBytes) {
+      log('WARNING', {
+        event: 'energy_import_rejected',
+        eventId,
+        importId,
+        bucket,
+        fileName,
+        generation,
+        sizeBytes,
+        maxFileSizeBytes: maxCsvFileSizeBytes,
+        reason: 'FILE_TOO_LARGE',
+      });
+      // This is a permanent data error, so acknowledge the event without retry.
+      respond(res, 200, {
+        importId,
+        status: 'rejected',
+        reason: 'FILE_TOO_LARGE',
+      });
       return;
     }
 
@@ -206,7 +262,7 @@ async function handleStorageEvent(
       bucket,
       fileName,
       generation,
-      sizeBytes: contents.length,
+      sizeBytes,
       ...validationSummary,
       recordIdSample: recordIds.slice(0, 10),
       recordIdsTruncated: recordIds.length > 10,
