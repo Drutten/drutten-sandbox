@@ -47,6 +47,7 @@ gcloud services enable \
   - `roles/datastore.owner` - Create and manage the Firestore database
   - `roles/iam.serviceAccountUser` - Act as service account
   - `roles/iam.serviceAccountAdmin` - Create application runtime identities
+  - `roles/iam.roleAdmin` - Create the narrow custom role required by BigQuery load jobs
   - `roles/eventarc.admin` - Manage Eventarc triggers
   - `roles/resourcemanager.projectIamAdmin` - Manage the required project IAM bindings
   - `roles/storage.admin` - Terraform state (if using GCS backend)
@@ -146,6 +147,10 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/iam.serviceAccountAdmin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/iam.roleAdmin"
 
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \

@@ -97,6 +97,7 @@ export class BatchedBigQueryLoader {
     this.stream = this.table.createWriteStream({
       jobId: this.jobId,
       sourceFormat: 'NEWLINE_DELIMITED_JSON',
+      createDisposition: 'CREATE_NEVER',
       writeDisposition: 'WRITE_APPEND',
       schema: this.schema,
     });

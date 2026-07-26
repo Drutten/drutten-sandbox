@@ -142,6 +142,28 @@ resource "google_bigquery_table_iam_member" "energy_ingestion_data_editor" {
   ]
 }
 
+# BigQuery load jobs require tables.create even when CREATE_NEVER targets an
+# existing table. That permission can be granted only at dataset level, so use
+# a custom role instead of giving the runtime dataEditor over every table.
+resource "google_project_iam_custom_role" "energy_ingestion_load_job_creator" {
+  count = local.energy_ingestion_enabled ? 1 : 0
+
+  project     = var.project_id
+  role_id     = "energyIngestionLoadJobCreator"
+  title       = "Energy ingestion load job creator"
+  description = "Minimum dataset permission required by BigQuery load jobs"
+  permissions = ["bigquery.tables.create"]
+}
+
+resource "google_bigquery_dataset_iam_member" "energy_ingestion_load_job_creator" {
+  count = local.energy_ingestion_enabled ? 1 : 0
+
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.energy.dataset_id
+  role       = google_project_iam_custom_role.energy_ingestion_load_job_creator[0].name
+  member     = google_service_account.service_runtime[local.energy_ingestion_service_name].member
+}
+
 # Creating query jobs is a project-level permission. It does not grant access
 # to table data; table access is restricted by the bindings above.
 resource "google_project_iam_member" "energy_ingestion_job_user" {

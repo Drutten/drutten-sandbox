@@ -73,7 +73,9 @@ The `energy` BigQuery dataset contains:
 - `energy_records` for curated analytics data
 - `validation_errors` for searchable row-level data errors
 
-The ingestion runtime can edit only staging and validation errors. Firestore
+The ingestion runtime can edit only staging and validation errors. BigQuery
+also requires `tables.create` at dataset level for load jobs, so a custom role
+grants only that permission while every job uses `CREATE_NEVER`. Firestore
 stores import lifecycle state in `importRuns` documents and uses transactions
 to coordinate retries and concurrent event deliveries.
 
