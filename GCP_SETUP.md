@@ -49,6 +49,7 @@ gcloud services enable \
   - `roles/iam.serviceAccountAdmin` - Create application runtime identities
   - `roles/iam.roleAdmin` - Create the narrow custom role required by BigQuery load jobs
   - `roles/eventarc.admin` - Manage Eventarc triggers
+  - `roles/pubsub.admin` - Create Pub/Sub topics and subscriptions and manage their IAM policies
   - `roles/resourcemanager.projectIamAdmin` - Manage the required project IAM bindings
   - `roles/storage.admin` - Terraform state (if using GCS backend)
 
@@ -155,6 +156,10 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/eventarc.admin"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID \
+  --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/pubsub.admin"
 
 gcloud projects add-iam-policy-binding $PROJECT_ID \
   --member="serviceAccount:github-actions@${PROJECT_ID}.iam.gserviceaccount.com" \
