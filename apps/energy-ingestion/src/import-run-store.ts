@@ -4,7 +4,7 @@ import {
   type DocumentData,
   type Transaction,
 } from '@google-cloud/firestore';
-import type { LoadOutput } from './bigquery-loaders.ts';
+import type {LoadOutput} from './bigquery-loaders.ts';
 
 export interface ImportIdentity {
   importId: string;
@@ -27,8 +27,15 @@ export interface ClaimedImport {
 
 export type ClaimImportResult =
   | ClaimedImport
-  | { kind: 'already-finished'; status: string }
-  | { kind: 'in-progress' };
+  | {
+      kind: 'already-finished';
+      status: string;
+      stagedEventPublished: boolean;
+      rowCount: number;
+      validRowCount: number;
+      invalidRowCount: number;
+    }
+  | {kind: 'in-progress'};
 
 const collectionName = 'importRuns';
 const leaseDurationMilliseconds = 10 * 60 * 1000;
@@ -49,7 +56,7 @@ export class ImportRunStore {
       .collection(collectionName)
       .doc(identity.importId);
 
-    return this.firestore.runTransaction(async (transaction) => {
+    return this.firestore.runTransaction(async transaction => {
       const snapshot = await transaction.get(reference);
       const existing = snapshot.data();
       const now = Timestamp.now();
@@ -58,11 +65,15 @@ export class ImportRunStore {
         return {
           kind: 'already-finished',
           status: String(existing.status),
+          stagedEventPublished: existing.stagedEventPublishedAt != null,
+          rowCount: numberValue(existing.rowCount),
+          validRowCount: numberValue(existing.validRowCount),
+          invalidRowCount: numberValue(existing.invalidRowCount),
         };
       }
 
       if (isActivelyProcessing(existing, now)) {
-        return { kind: 'in-progress' };
+        return {kind: 'in-progress'};
       }
 
       const previousAttempt = numberValue(existing?.attemptNumber);
@@ -110,9 +121,7 @@ export class ImportRunStore {
             now.toMillis() + leaseDurationMilliseconds,
           ),
           stagingJobId,
-          stagingJobStatus: stagingAlreadySucceeded
-            ? 'SUCCEEDED'
-            : 'PENDING',
+          stagingJobStatus: stagingAlreadySucceeded ? 'SUCCEEDED' : 'PENDING',
           validationErrorsJobId,
           validationErrorsJobStatus: validationErrorsAlreadySucceeded
             ? 'SUCCEEDED'
@@ -121,7 +130,7 @@ export class ImportRunStore {
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         },
-        { merge: true },
+        {merge: true},
       );
 
       return {
@@ -163,7 +172,9 @@ export class ImportRunStore {
         data.stagingJobStatus !== 'SUCCEEDED' ||
         data.validationErrorsJobStatus !== 'SUCCEEDED'
       ) {
-        throw new Error('Cannot mark import STAGED before both outputs succeed');
+        throw new Error(
+          'Cannot mark import STAGED before both outputs succeed',
+        );
       }
 
       transaction.update(this.document(importId), {
@@ -184,11 +195,31 @@ export class ImportRunStore {
     await this.updateOwnedRun(importId, ownerId, (transaction, _data, now) => {
       transaction.update(this.document(importId), {
         status: 'FAILED_TECHNICAL',
-        ...(failedOutput
-          ? { [outputStatusField(failedOutput)]: 'FAILED' }
-          : {}),
+        ...(failedOutput ? {[outputStatusField(failedOutput)]: 'FAILED'} : {}),
         technicalError,
         leaseExpiresAt: now,
+        updatedAt: now,
+      });
+    });
+  }
+
+  async markStagedEventPublished(
+    importId: string,
+    eventId: string,
+  ): Promise<void> {
+    const reference = this.document(importId);
+    await this.firestore.runTransaction(async transaction => {
+      const snapshot = await transaction.get(reference);
+      const data = snapshot.data();
+      if (!data || data.status !== 'STAGED') {
+        throw new Error('Cannot mark staged event for a non-STAGED import');
+      }
+      if (data.stagedEventPublishedAt != null) return;
+
+      const now = Timestamp.now();
+      transaction.update(reference, {
+        stagedEventId: eventId,
+        stagedEventPublishedAt: now,
         updatedAt: now,
       });
     });
@@ -201,7 +232,7 @@ export class ImportRunStore {
     ownerId?: string,
   ): Promise<void> {
     const reference = this.document(identity.importId);
-    await this.firestore.runTransaction(async (transaction) => {
+    await this.firestore.runTransaction(async transaction => {
       const snapshot = await transaction.get(reference);
       const existing = snapshot.data();
       if (existing && terminalStatuses.has(String(existing.status))) return;
@@ -226,7 +257,7 @@ export class ImportRunStore {
           createdAt: existing?.createdAt ?? now,
           updatedAt: now,
         },
-        { merge: true },
+        {merge: true},
       );
     });
   }
@@ -245,7 +276,7 @@ export class ImportRunStore {
     ) => void,
   ): Promise<void> {
     const reference = this.document(importId);
-    await this.firestore.runTransaction(async (transaction) => {
+    await this.firestore.runTransaction(async transaction => {
       const snapshot = await transaction.get(reference);
       const data = snapshot.data();
       if (!data || data.status !== 'PROCESSING' || data.ownerId !== ownerId) {

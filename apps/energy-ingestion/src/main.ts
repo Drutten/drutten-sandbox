@@ -1,9 +1,10 @@
-import { randomUUID } from 'node:crypto';
-import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { BigQuery } from '@google-cloud/bigquery';
-import { Firestore } from '@google-cloud/firestore';
-import { Storage } from '@google-cloud/storage';
+import {randomUUID} from 'node:crypto';
+import {createServer} from 'node:http';
+import type {IncomingMessage, ServerResponse} from 'node:http';
+import {BigQuery} from '@google-cloud/bigquery';
+import {Firestore} from '@google-cloud/firestore';
+import {PubSub} from '@google-cloud/pubsub';
+import {Storage} from '@google-cloud/storage';
 import {
   BatchedBigQueryLoader,
   BigQueryOutputError,
@@ -12,16 +13,14 @@ import {
   toValidationErrorRows,
   validationErrorsSchema,
 } from './bigquery-loaders.js';
-import { createImportId } from './identifiers.js';
+import {createImportId} from './identifiers.js';
+import {EnergyEventPublisher} from './energy-events.js';
 import {
   ImportRunStore,
   type ClaimedImport,
   type ImportIdentity,
 } from './import-run-store.js';
-import {
-  InvalidCsvFileError,
-  parseCsvRows,
-} from './parse-csv-rows.js';
+import {InvalidCsvFileError, parseCsvRows} from './parse-csv-rows.js';
 
 const host = process.env.HOST ?? '0.0.0.0';
 const port = Number(process.env.PORT ?? 3000);
@@ -31,6 +30,10 @@ const importRunStore = new ImportRunStore(new Firestore());
 const storageFinalizedEvent = 'google.cloud.storage.object.v1.finalized';
 const region = requiredEnvironmentVariable('GCP_REGION');
 const energyDatasetId = requiredEnvironmentVariable('ENERGY_DATASET_ID');
+const energyEventPublisher = new EnergyEventPublisher(
+  new PubSub(),
+  requiredEnvironmentVariable('ENERGY_IMPORT_STAGED_TOPIC_ID'),
+);
 // Limits the Eventarc metadata body, not the CSV file downloaded from GCS.
 const maxEventBodyBytes = 1024 * 1024;
 const maxCsvFileSizeBytes = positiveIntegerEnvironmentVariable(
@@ -77,7 +80,7 @@ function respond(
     return;
   }
 
-  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.writeHead(statusCode, {'Content-Type': 'application/json'});
   res.end(JSON.stringify(body));
 }
 
@@ -85,7 +88,7 @@ function log(
   severity: 'INFO' | 'WARNING' | 'ERROR',
   data: Record<string, unknown>,
 ): void {
-  console.log(JSON.stringify({ severity, ...data }));
+  console.log(JSON.stringify({severity, ...data}));
 }
 
 function header(req: IncomingMessage, name: string): string | undefined {
@@ -147,7 +150,7 @@ async function handleStorageEvent(
   const eventType = header(req, 'ce-type');
 
   if (eventType !== storageFinalizedEvent || eventId === undefined) {
-    respond(res, 400, { error: 'Unsupported or malformed CloudEvent' });
+    respond(res, 400, {error: 'Unsupported or malformed CloudEvent'});
     return;
   }
 
@@ -158,6 +161,7 @@ async function handleStorageEvent(
   let claim: ClaimedImport | undefined;
   let stagingLoader: BatchedBigQueryLoader | undefined;
   let validationErrorsLoader: BatchedBigQueryLoader | undefined;
+  let importWasStaged = false;
 
   try {
     const body = await readJsonBody(req);
@@ -171,7 +175,7 @@ async function handleStorageEvent(
       eventId,
       reason: error instanceof Error ? error.message : String(error),
     });
-    respond(res, 400, { error: 'Invalid Storage event data' });
+    respond(res, 400, {error: 'Invalid Storage event data'});
     return;
   }
 
@@ -228,6 +232,24 @@ async function handleStorageEvent(
 
     const claimResult = await importRunStore.claim(identity, randomUUID());
     if (claimResult.kind === 'already-finished') {
+      if (
+        claimResult.status === 'STAGED' &&
+        !claimResult.stagedEventPublished
+      ) {
+        const stagedEvent = await energyEventPublisher.publishImportStaged({
+          importId,
+          bucketName: bucket,
+          objectName: fileName,
+          objectGeneration: generation,
+          rowCount: claimResult.rowCount,
+          validRowCount: claimResult.validRowCount,
+          invalidRowCount: claimResult.invalidRowCount,
+        });
+        await importRunStore.markStagedEventPublished(
+          importId,
+          stagedEvent.eventId,
+        );
+      }
       log('INFO', {
         event: 'energy_import_already_finished',
         eventId,
@@ -254,7 +276,7 @@ async function handleStorageEvent(
     }
     claim = claimResult;
 
-    const dataset = bigquery.dataset(energyDatasetId, { location: region });
+    const dataset = bigquery.dataset(energyDatasetId, {location: region});
     stagingLoader = new BatchedBigQueryLoader(
       bigquery,
       dataset.table('energy_records_staging'),
@@ -276,7 +298,7 @@ async function handleStorageEvent(
     const processingTimestamp = new Date().toISOString();
     const contents = storage
       .bucket(bucket)
-      .file(fileName, { generation })
+      .file(fileName, {generation})
       .createReadStream();
     const summary = await parseCsvRows(contents, {
       onValidRow: async (row, rowNumber, recordId) => {
@@ -319,6 +341,21 @@ async function handleStorageEvent(
       validRowCount: summary.validRowCount,
       invalidRowCount: summary.invalidRowCount,
     });
+    importWasStaged = true;
+
+    const stagedEvent = await energyEventPublisher.publishImportStaged({
+      importId,
+      bucketName: bucket,
+      objectName: fileName,
+      objectGeneration: generation,
+      rowCount: summary.rowCount,
+      validRowCount: summary.validRowCount,
+      invalidRowCount: summary.invalidRowCount,
+    });
+    await importRunStore.markStagedEventPublished(
+      importId,
+      stagedEvent.eventId,
+    );
 
     log(summary.invalidRowCount === 0 ? 'INFO' : 'WARNING', {
       event: 'energy_import_staged',
@@ -332,6 +369,7 @@ async function handleStorageEvent(
       attemptNumber: claim.attemptNumber,
       stagingJobId: claim.stagingJobId,
       validationErrorsJobId: claim.validationErrorsJobId,
+      stagedEventId: stagedEvent.eventId,
       ...summary,
     });
 
@@ -356,7 +394,7 @@ async function handleStorageEvent(
           importId,
           reason: 'Missing claimed import identity',
         });
-        respond(res, 500, { error: 'Failed to update import state' });
+        respond(res, 500, {error: 'Failed to update import state'});
         return;
       }
       try {
@@ -376,7 +414,7 @@ async function handleStorageEvent(
               ? stateError.message
               : String(stateError),
         });
-        respond(res, 500, { error: 'Failed to update import state' });
+        respond(res, 500, {error: 'Failed to update import state'});
         return;
       }
       log('WARNING', {
@@ -394,14 +432,13 @@ async function handleStorageEvent(
       return;
     }
 
-    if (importId && claim) {
+    if (importId && claim && !importWasStaged) {
       try {
         await importRunStore.markTechnicalFailure(
           importId,
           claim.ownerId,
           caughtError.message,
-          error instanceof BigQueryOutputError &&
-            error.retryWithNewJobId
+          error instanceof BigQueryOutputError && error.retryWithNewJobId
             ? error.output
             : undefined,
         );
@@ -424,18 +461,18 @@ async function handleStorageEvent(
       importId,
       reason: caughtError.message,
     });
-    respond(res, 500, { error: 'Failed to process uploaded file' });
+    respond(res, 500, {error: 'Failed to process uploaded file'});
   }
 }
 
 const server = createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
-    respond(res, 200, { status: 'ok' });
+    respond(res, 200, {status: 'ok'});
     return;
   }
 
   if (req.method !== 'POST') {
-    respond(res, 405, { error: 'Method not allowed' });
+    respond(res, 405, {error: 'Method not allowed'});
     return;
   }
 
@@ -444,4 +481,9 @@ const server = createServer((req, res) => {
 
 server.listen(port, host, () => {
   console.log(`energy-ingestion listening on http://${host}:${port}`);
+});
+
+process.once('SIGTERM', () => {
+  log('INFO', {event: 'energy_ingestion_shutting_down'});
+  server.close(() => process.exit(0));
 });

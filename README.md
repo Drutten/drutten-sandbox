@@ -14,6 +14,7 @@ files for validation, analysis, and visualization.
 CSV upload -> Cloud Storage -> Eventarc -> energy-ingestion (Cloud Run)
                                       |-> Firestore (import state)
                                       |-> BigQuery (staging and validation errors)
+                                      `-> Pub/Sub (EnergyImportStaged)
 ```
 
 The `energy-ingestion` service currently:
@@ -25,10 +26,12 @@ The `energy-ingestion` service currently:
 5. Parses and validates the CSV one row at a time.
 6. Loads valid rows and validation errors to BigQuery in bounded batches.
 7. Marks the import `STAGED` only after both BigQuery outputs succeed.
+8. Publishes `EnergyImportStaged` with a deterministic event ID.
 
 Firestore is the control plane for operational import state. BigQuery is the
 data plane for records and searchable validation errors. Deduplication into
-the curated `energy_records` table will be added incrementally.
+the processed `energy_records` table will be handled by a separate processing
+service.
 
 ## Local development
 

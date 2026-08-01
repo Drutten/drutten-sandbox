@@ -12,9 +12,10 @@ locals {
       allow_unauthenticated = false
       deletion_protection   = true
       environment_variables = {
-        MAX_CSV_FILE_SIZE_BYTES = "10485760" # 10 MiB
-        ENERGY_DATASET_ID       = "energy"
-        GCP_REGION              = var.region
+        MAX_CSV_FILE_SIZE_BYTES       = "10485760" # 10 MiB
+        ENERGY_DATASET_ID             = "energy"
+        ENERGY_IMPORT_STAGED_TOPIC_ID = google_pubsub_topic.energy_import_staged.name
+        GCP_REGION                    = var.region
       }
     }
   }
