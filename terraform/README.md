@@ -11,6 +11,7 @@ This directory contains Terraform/OpenTofu configuration for managing all GCP in
 - `cloud_run.tf` - Cloud Run service definitions
 - `energy_bigquery.tf` - Energy dataset, tables, and runtime IAM
 - `energy_firestore.tf` - Firestore import state and runtime IAM
+- `energy_events.tf` - Energy domain Pub/Sub topics and publisher IAM
 - `terraform.tfvars.example` - Example configuration file
 
 ## Setup
@@ -78,6 +79,9 @@ also requires `tables.create` at dataset level for load jobs, so a custom role
 grants only that permission while every job uses `CREATE_NEVER`. Firestore
 stores import lifecycle state in `importRuns` documents and uses transactions
 to coordinate retries and concurrent event deliveries.
+
+The `energy-import-staged` Pub/Sub topic carries imports that are ready for the
+future processing service. Only the ingestion runtime can publish to it.
 
 ## Bootstrap Order
 

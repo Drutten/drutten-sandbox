@@ -31,3 +31,8 @@ output "energy_import_firestore_database" {
   description = "Firestore database used for import workflow state"
   value       = google_firestore_database.energy_import_control.name
 }
+
+output "energy_import_staged_topic" {
+  description = "Pub/Sub topic for imports ready for processing"
+  value       = google_pubsub_topic.energy_import_staged.name
+}
