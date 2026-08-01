@@ -14,7 +14,11 @@ import {
   validationErrorsSchema,
 } from './bigquery-loaders.js';
 import {createImportId} from './identifiers.js';
-import {EnergyEventPublisher} from './energy-events.js';
+import {
+  EnergyEventPublisher,
+  type EnergyImportStagedData,
+  type EnergyImportStagedEvent,
+} from './energy-events.js';
 import {
   ImportRunStore,
   type ClaimedImport,
@@ -30,9 +34,12 @@ const importRunStore = new ImportRunStore(new Firestore());
 const storageFinalizedEvent = 'google.cloud.storage.object.v1.finalized';
 const region = requiredEnvironmentVariable('GCP_REGION');
 const energyDatasetId = requiredEnvironmentVariable('ENERGY_DATASET_ID');
+const energyImportStagedTopicId = requiredEnvironmentVariable(
+  'ENERGY_IMPORT_STAGED_TOPIC_ID',
+);
 const energyEventPublisher = new EnergyEventPublisher(
   new PubSub(),
-  requiredEnvironmentVariable('ENERGY_IMPORT_STAGED_TOPIC_ID'),
+  energyImportStagedTopicId,
 );
 // Limits the Eventarc metadata body, not the CSV file downloaded from GCS.
 const maxEventBodyBytes = 1024 * 1024;
@@ -94,6 +101,22 @@ function log(
 function header(req: IncomingMessage, name: string): string | undefined {
   const value = req.headers[name];
   return Array.isArray(value) ? value[0] : value;
+}
+
+async function publishImportStagedEvent(
+  data: EnergyImportStagedData,
+): Promise<EnergyImportStagedEvent> {
+  const {event, messageId} =
+    await energyEventPublisher.publishImportStaged(data);
+  await importRunStore.markStagedEventPublished(data.importId, event.eventId);
+  log('INFO', {
+    event: 'energy_import_staged_event_published',
+    importId: data.importId,
+    stagedEventId: event.eventId,
+    pubsubMessageId: messageId,
+    topic: energyImportStagedTopicId,
+  });
+  return event;
 }
 
 async function readJsonBody(req: IncomingMessage): Promise<unknown> {
@@ -236,7 +259,7 @@ async function handleStorageEvent(
         claimResult.status === 'STAGED' &&
         !claimResult.stagedEventPublished
       ) {
-        const stagedEvent = await energyEventPublisher.publishImportStaged({
+        await publishImportStagedEvent({
           importId,
           bucketName: bucket,
           objectName: fileName,
@@ -245,10 +268,6 @@ async function handleStorageEvent(
           validRowCount: claimResult.validRowCount,
           invalidRowCount: claimResult.invalidRowCount,
         });
-        await importRunStore.markStagedEventPublished(
-          importId,
-          stagedEvent.eventId,
-        );
       }
       log('INFO', {
         event: 'energy_import_already_finished',
@@ -343,7 +362,7 @@ async function handleStorageEvent(
     });
     importWasStaged = true;
 
-    const stagedEvent = await energyEventPublisher.publishImportStaged({
+    const stagedEvent = await publishImportStagedEvent({
       importId,
       bucketName: bucket,
       objectName: fileName,
@@ -352,11 +371,6 @@ async function handleStorageEvent(
       validRowCount: summary.validRowCount,
       invalidRowCount: summary.invalidRowCount,
     });
-    await importRunStore.markStagedEventPublished(
-      importId,
-      stagedEvent.eventId,
-    );
-
     log(summary.invalidRowCount === 0 ? 'INFO' : 'WARNING', {
       event: 'energy_import_staged',
       eventId,

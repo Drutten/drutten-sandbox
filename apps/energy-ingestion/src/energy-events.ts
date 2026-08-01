@@ -44,15 +44,17 @@ export class EnergyEventPublisher {
 
   async publishImportStaged(
     data: EnergyImportStagedData,
-  ): Promise<EnergyImportStagedEvent> {
+  ): Promise<{event: EnergyImportStagedEvent; messageId: string}> {
     const event = createEnergyImportStagedEvent(data);
-    await this.pubsub.topic(this.stagedTopicId).publishMessage({
-      json: event,
-      attributes: {
-        eventId: event.eventId,
-        eventType: event.eventType,
-      },
-    });
-    return event;
+    const messageId = await this.pubsub
+      .topic(this.stagedTopicId)
+      .publishMessage({
+        json: event,
+        attributes: {
+          eventId: event.eventId,
+          eventType: event.eventType,
+        },
+      });
+    return {event, messageId};
   }
 }
