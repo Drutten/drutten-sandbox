@@ -15,6 +15,7 @@ CSV upload -> Cloud Storage -> Eventarc -> energy-ingestion (Cloud Run)
                                       |-> Firestore (import state)
                                       |-> BigQuery (staging and validation errors)
                                       `-> Pub/Sub (EnergyImportStaged)
+                                                `-> Eventarc -> energy-processing
 ```
 
 The `energy-ingestion` service currently:
@@ -33,6 +34,10 @@ data plane for records and searchable validation errors. Deduplication into
 the processed `energy_records` table will be handled by a separate processing
 service.
 
+The `energy-processing` service currently receives and validates staged-import
+events. Its idempotent BigQuery merge into `energy_records` is the next
+increment.
+
 ## Local development
 
 Install dependencies:
@@ -46,6 +51,8 @@ Useful Nx commands:
 ```bash
 pnpm exec nx serve energy-ingestion
 pnpm exec nx build energy-ingestion
+pnpm exec nx serve energy-processing
+pnpm exec nx build energy-processing
 pnpm exec nx graph
 ```
 

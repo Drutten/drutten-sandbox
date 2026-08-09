@@ -65,6 +65,8 @@ importers:
         specifier: ^7.0.1
         version: 7.0.1
 
+  apps/energy-processing: {}
+
 packages:
   '@babel/code-frame@7.27.1':
     resolution:

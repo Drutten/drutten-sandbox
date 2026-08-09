@@ -1,0 +1,52 @@
+{
+  "name": "energy-processing",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/energy-processing/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "dist/apps/energy-processing",
+        "format": ["cjs"],
+        "bundle": true,
+        "thirdParty": true,
+        "main": "apps/energy-processing/src/main.ts",
+        "tsConfig": "apps/energy-processing/tsconfig.app.json"
+      },
+      "configurations": {
+        "development": {},
+        "production": {}
+      }
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "energy-processing:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "energy-processing:build:development"
+        },
+        "production": {
+          "buildTarget": "energy-processing:build:production"
+        }
+      }
+    },
+    "test": {
+      "command": "node --test apps/energy-processing/tests/*.test.ts"
+    },
+    "docker-build": {
+      "dependsOn": ["build"],
+      "command": "docker build -f apps/energy-processing/Dockerfile . -t energy-processing"
+    }
+  }
+}
