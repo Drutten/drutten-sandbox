@@ -5,9 +5,10 @@
 project_id = "your-gcp-project-id"
 region     = "europe-west1"
 
-# The energy-ingestion service is enabled by default. Override services here to customize it
-# or add more deployable applications. CI moves each service's latest tag only
-# after a successful build; Terraform resolves that tag to an immutable digest.
+# The energy-ingestion and energy-processing services are enabled by default.
+# Override services here to customize them or add more deployable applications.
+# CI moves each service's latest tag only after a successful build. Terraform
+# resolves that tag to an immutable digest.
 # services = {
 #   "energy-ingestion" = {
 #     image_name            = "energy-ingestion"
@@ -19,13 +20,14 @@ region     = "europe-west1"
 #     allow_unauthenticated = false
 #     deletion_protection   = true
 #   }
-#   "worker" = {
-#     image_name            = "worker"
+#   "energy-processing" = {
+#     image_name            = "energy-processing"
 #     image_tag             = "latest"
-#     cpu                   = "2"
-#     memory                = "1Gi"
-#     max_instances         = 5
-#     min_instances         = 1
+#     cpu                   = "1"
+#     memory                = "512Mi"
+#     max_instances         = 10
+#     min_instances         = 0
 #     allow_unauthenticated = false
+#     deletion_protection   = true
 #   }
 # }

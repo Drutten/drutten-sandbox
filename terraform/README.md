@@ -12,6 +12,7 @@ This directory contains Terraform/OpenTofu configuration for managing all GCP in
 - `energy_bigquery.tf` - Energy dataset, tables, and runtime IAM
 - `energy_firestore.tf` - Firestore import state and runtime IAM
 - `energy_events.tf` - Energy domain Pub/Sub topics and publisher IAM
+- `energy_processing.tf` - Processing Eventarc trigger and invocation IAM
 - `terraform.tfvars.example` - Example configuration file
 
 ## Setup
@@ -81,7 +82,9 @@ stores import lifecycle state in `importRuns` documents and uses transactions
 to coordinate retries and concurrent event deliveries.
 
 The `energy-import-staged` Pub/Sub topic carries imports that are ready for the
-future processing service. Only the ingestion runtime can publish to it.
+processing service. Only the ingestion runtime can publish to it. Eventarc
+manages a dedicated Pub/Sub subscription and invokes the private
+`energy-processing` Cloud Run service with staged-import events.
 
 ## Bootstrap Order
 
@@ -92,8 +95,9 @@ only reference an image that already exists:
 2. Build and push the initial application image.
 3. Enable the service and apply again to create Cloud Run.
 
-The repository enables the `energy-ingestion` service by default. Its image is
-built and pushed before Terraform plans the Cloud Run and Eventarc resources.
+The repository enables `energy-ingestion` and `energy-processing` by default.
+Their images must be built and pushed before Terraform plans the Cloud Run and
+Eventarc resources.
 
 After this one-time bootstrap, a normal merge to `main` performs the image push
 and Cloud Run deployment in the same pipeline run. The image is pushed first,
