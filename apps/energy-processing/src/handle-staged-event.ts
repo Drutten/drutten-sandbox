@@ -7,10 +7,12 @@ import {
 } from './parse-pubsub-event.ts';
 import type {StagingRecordReader} from './staging-records.ts';
 import type {EnergyRecordMerger} from './energy-record-merger.ts';
+import type {ImportRunCompleter} from './import-run-store.ts';
 
 export interface StagedEventDependencies {
   stagingRecords: StagingRecordReader;
   energyRecords: EnergyRecordMerger;
+  importRuns: ImportRunCompleter;
 }
 
 export async function handleStagedEvent(
@@ -60,6 +62,19 @@ export async function handleStagedEvent(
       mergeJobId: merge.jobId,
       affectedRowCount: merge.affectedRowCount,
       reusedExistingJob: merge.reusedExistingJob,
+    });
+
+    const completion = await dependencies.importRuns.markCompleted(
+      delivery.event.importId,
+      delivery.event.eventId,
+      merge.jobId,
+    );
+    log('INFO', {
+      event: 'energy_import_completed',
+      importId: delivery.event.importId,
+      stagedEventId: delivery.event.eventId,
+      mergeJobId: merge.jobId,
+      alreadyCompleted: completion === 'already-completed',
     });
     respond(response, 204);
   } catch (error) {

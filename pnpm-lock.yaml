@@ -70,6 +70,9 @@ importers:
       '@google-cloud/bigquery':
         specifier: ^8.3.1
         version: 8.3.1
+      '@google-cloud/firestore':
+        specifier: ^8.7.0
+        version: 8.7.0
 
 packages:
   '@babel/code-frame@7.27.1':

@@ -211,8 +211,10 @@ export class ImportRunStore {
     await this.firestore.runTransaction(async transaction => {
       const snapshot = await transaction.get(reference);
       const data = snapshot.data();
-      if (!data || data.status !== 'STAGED') {
-        throw new Error('Cannot mark staged event for a non-STAGED import');
+      if (!data || (data.status !== 'STAGED' && data.status !== 'COMPLETED')) {
+        throw new Error(
+          'Cannot mark staged event for an import that is not STAGED or COMPLETED',
+        );
       }
       if (data.stagedEventPublishedAt != null) return;
 

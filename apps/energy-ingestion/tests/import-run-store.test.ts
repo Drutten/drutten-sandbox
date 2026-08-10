@@ -74,6 +74,20 @@ describe('ImportRunStore.claim', () => {
   });
 });
 
+describe('ImportRunStore.markStagedEventPublished', () => {
+  it('accepts that processing already completed the import', async () => {
+    const fake = fakeFirestore({ status: 'COMPLETED' });
+
+    await new ImportRunStore(fake.firestore).markStagedEventPublished(
+      identity.importId,
+      'staged-event-1',
+    );
+
+    assert.equal(fake.writtenData?.stagedEventId, 'staged-event-1');
+    assert.ok(fake.writtenData?.stagedEventPublishedAt != null);
+  });
+});
+
 function fakeFirestore(existing?: DocumentData): {
   firestore: Firestore;
   writtenData?: DocumentData;
@@ -88,6 +102,7 @@ function fakeFirestore(existing?: DocumentData): {
   interface FakeTransaction {
     get(): Promise<{ data: () => DocumentData | undefined }>;
     set(reference: unknown, data: DocumentData): void;
+    update(reference: unknown, data: DocumentData): void;
   }
   const reference = {};
   const transaction: FakeTransaction = {
@@ -95,6 +110,9 @@ function fakeFirestore(existing?: DocumentData): {
       return { data: () => existing };
     },
     set(_reference: unknown, data: DocumentData) {
+      result.writtenData = data;
+    },
+    update(_reference: unknown, data: DocumentData) {
       result.writtenData = data;
     },
   };

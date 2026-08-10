@@ -17,3 +17,13 @@ resource "google_project_iam_member" "energy_ingestion_firestore_user" {
   role    = "roles/datastore.user"
   member  = google_service_account.service_runtime[local.energy_ingestion_service_name].member
 }
+
+# Processing updates the same import run after the staged rows have been
+# merged into the final energy table.
+resource "google_project_iam_member" "energy_processing_firestore_user" {
+  count = local.energy_processing_enabled ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = google_service_account.service_runtime[local.energy_processing_service_name].member
+}
