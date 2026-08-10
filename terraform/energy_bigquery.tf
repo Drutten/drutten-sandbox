@@ -173,3 +173,24 @@ resource "google_project_iam_member" "energy_ingestion_job_user" {
   role    = "roles/bigquery.jobUser"
   member  = google_service_account.service_runtime[local.energy_ingestion_service_name].member
 }
+
+# Processing may read only the staging table at this stage of the flow.
+resource "google_bigquery_table_iam_member" "energy_processing_staging_reader" {
+  count = local.energy_processing_enabled ? 1 : 0
+
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.energy.dataset_id
+  table_id   = google_bigquery_table.energy_records_staging.table_id
+  role       = "roles/bigquery.dataViewer"
+  member     = google_service_account.service_runtime[local.energy_processing_service_name].member
+}
+
+# Running a SELECT requires creating a query job in the project. Table data
+# access remains limited by the table-level binding above.
+resource "google_project_iam_member" "energy_processing_job_user" {
+  count = local.energy_processing_enabled ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = google_service_account.service_runtime[local.energy_processing_service_name].member
+}

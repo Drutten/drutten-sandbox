@@ -3,5 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
-  "dependencies": {}
+  "dependencies": {
+    "@google-cloud/bigquery": "^8.3.1"
+  }
 }
