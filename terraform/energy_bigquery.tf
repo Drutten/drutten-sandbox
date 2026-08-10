@@ -185,6 +185,17 @@ resource "google_bigquery_table_iam_member" "energy_processing_staging_reader" {
   member     = google_service_account.service_runtime[local.energy_processing_service_name].member
 }
 
+# Processing owns the final table and may update or insert its records.
+resource "google_bigquery_table_iam_member" "energy_processing_records_editor" {
+  count = local.energy_processing_enabled ? 1 : 0
+
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.energy.dataset_id
+  table_id   = google_bigquery_table.energy_records.table_id
+  role       = "roles/bigquery.dataEditor"
+  member     = google_service_account.service_runtime[local.energy_processing_service_name].member
+}
+
 # Running a SELECT requires creating a query job in the project. Table data
 # access remains limited by the table-level binding above.
 resource "google_project_iam_member" "energy_processing_job_user" {

@@ -6,9 +6,11 @@ import {
   parsePubSubEvent,
 } from './parse-pubsub-event.ts';
 import type {StagingRecordReader} from './staging-records.ts';
+import type {EnergyRecordMerger} from './energy-record-merger.ts';
 
 export interface StagedEventDependencies {
   stagingRecords: StagingRecordReader;
+  energyRecords: EnergyRecordMerger;
 }
 
 export async function handleStagedEvent(
@@ -39,6 +41,25 @@ export async function handleStagedEvent(
       stagingRowCount,
       expectedValidRowCount: delivery.event.validRowCount,
       rowCountMatches: stagingRowCount === delivery.event.validRowCount,
+    });
+
+    if (stagingRowCount !== delivery.event.validRowCount) {
+      throw new Error(
+        `Staging row count ${stagingRowCount} does not match expected count ${delivery.event.validRowCount}`,
+      );
+    }
+
+    const merge = await dependencies.energyRecords.mergeImport(
+      delivery.event.importId,
+      delivery.event.eventId,
+    );
+    log('INFO', {
+      event: 'energy_records_merged',
+      importId: delivery.event.importId,
+      stagedEventId: delivery.event.eventId,
+      mergeJobId: merge.jobId,
+      affectedRowCount: merge.affectedRowCount,
+      reusedExistingJob: merge.reusedExistingJob,
     });
     respond(response, 204);
   } catch (error) {
