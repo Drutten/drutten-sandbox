@@ -29,8 +29,9 @@ locals {
       allow_unauthenticated = false
       deletion_protection   = true
       environment_variables = {
-        ENERGY_DATASET_ID = "energy"
-        GCP_REGION        = var.region
+        ENERGY_DATASET_ID                = "energy"
+        ENERGY_IMPORT_COMPLETED_TOPIC_ID = google_pubsub_topic.energy_import_completed.name
+        GCP_REGION                       = var.region
       }
     }
   }

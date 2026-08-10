@@ -73,6 +73,9 @@ importers:
       '@google-cloud/firestore':
         specifier: ^8.7.0
         version: 8.7.0
+      '@google-cloud/pubsub':
+        specifier: ^5.3.1
+        version: 5.3.1
 
 packages:
   '@babel/code-frame@7.27.1':

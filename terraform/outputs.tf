@@ -36,3 +36,8 @@ output "energy_import_staged_topic" {
   description = "Pub/Sub topic for imports ready for processing"
   value       = google_pubsub_topic.energy_import_staged.name
 }
+
+output "energy_import_completed_topic" {
+  description = "Pub/Sub topic for successfully processed imports"
+  value       = google_pubsub_topic.energy_import_completed.name
+}

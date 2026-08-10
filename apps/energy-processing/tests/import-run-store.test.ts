@@ -16,7 +16,10 @@ describe('FirestoreImportRunStore', () => {
       'merge-job-1',
     );
 
-    assert.equal(result, 'completed');
+    assert.deepEqual(result, {
+      alreadyCompleted: false,
+      completedEventPublished: false,
+    });
     assert.equal(updates.length, 1);
     assert.equal(updates[0]?.status, 'COMPLETED');
     assert.equal(updates[0]?.mergeJobId, 'merge-job-1');
@@ -38,8 +41,45 @@ describe('FirestoreImportRunStore', () => {
       'merge-job-1',
     );
 
-    assert.equal(result, 'already-completed');
+    assert.deepEqual(result, {
+      alreadyCompleted: true,
+      completedEventPublished: false,
+    });
     assert.deepEqual(updates, []);
+  });
+
+  it('reports when the completed event was already published', async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const store = new FirestoreImportRunStore(
+      fakeFirestore(
+        {status: 'COMPLETED', completedEventPublishedAt: {}},
+        updates,
+      ),
+    );
+
+    const result = await store.markCompleted(
+      'import-1',
+      'event-1',
+      'merge-job-1',
+    );
+
+    assert.deepEqual(result, {
+      alreadyCompleted: true,
+      completedEventPublished: true,
+    });
+    assert.deepEqual(updates, []);
+  });
+
+  it('records successful publication of the completed event', async () => {
+    const updates: Array<Record<string, unknown>> = [];
+    const store = new FirestoreImportRunStore(
+      fakeFirestore({status: 'COMPLETED'}, updates),
+    );
+
+    await store.markCompletedEventPublished('import-1', 'completed-event-1');
+
+    assert.equal(updates[0]?.completedEventId, 'completed-event-1');
+    assert.ok(updates[0]?.completedEventPublishedAt != null);
   });
 });
 

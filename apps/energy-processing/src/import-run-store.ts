@@ -1,6 +1,9 @@
 import {Firestore, Timestamp} from '@google-cloud/firestore';
 
-export type CompleteImportResult = 'completed' | 'already-completed';
+export interface CompleteImportResult {
+  alreadyCompleted: boolean;
+  completedEventPublished: boolean;
+}
 
 export interface ImportRunCompleter {
   markCompleted(
@@ -8,6 +11,7 @@ export interface ImportRunCompleter {
     stagedEventId: string,
     mergeJobId: string,
   ): Promise<CompleteImportResult>;
+  markCompletedEventPublished(importId: string, eventId: string): Promise<void>;
 }
 
 const collectionName = 'importRuns';
@@ -33,7 +37,10 @@ export class FirestoreImportRunStore implements ImportRunCompleter {
         throw new Error(`Import run ${importId} does not exist`);
       }
       if (data.status === 'COMPLETED') {
-        return 'already-completed';
+        return {
+          alreadyCompleted: true,
+          completedEventPublished: data.completedEventPublishedAt != null,
+        };
       }
       if (data.status !== 'STAGED') {
         throw new Error(
@@ -57,7 +64,37 @@ export class FirestoreImportRunStore implements ImportRunCompleter {
         technicalError: null,
         updatedAt: now,
       });
-      return 'completed';
+      return {alreadyCompleted: false, completedEventPublished: false};
+    });
+  }
+
+  async markCompletedEventPublished(
+    importId: string,
+    eventId: string,
+  ): Promise<void> {
+    const reference = this.firestore.collection(collectionName).doc(importId);
+
+    await this.firestore.runTransaction(async transaction => {
+      const snapshot = await transaction.get(reference);
+      const data = snapshot.data();
+      if (!data || data.status !== 'COMPLETED') {
+        throw new Error(
+          `Cannot mark completed event for non-COMPLETED import ${importId}`,
+        );
+      }
+      if (data.completedEventPublishedAt != null) {
+        if (data.completedEventId !== eventId) {
+          throw new Error(`Completed event does not match import ${importId}`);
+        }
+        return;
+      }
+
+      const now = Timestamp.now();
+      transaction.update(reference, {
+        completedEventId: eventId,
+        completedEventPublishedAt: now,
+        updatedAt: now,
+      });
     });
   }
 }

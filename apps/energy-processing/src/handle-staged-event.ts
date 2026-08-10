@@ -8,11 +8,14 @@ import {
 import type {StagingRecordReader} from './staging-records.ts';
 import type {EnergyRecordMerger} from './energy-record-merger.ts';
 import type {ImportRunCompleter} from './import-run-store.ts';
+import type {CompletedEventPublisher} from './energy-events.ts';
 
 export interface StagedEventDependencies {
   stagingRecords: StagingRecordReader;
   energyRecords: EnergyRecordMerger;
   importRuns: ImportRunCompleter;
+  energyEventPublisher: CompletedEventPublisher;
+  energyImportCompletedTopicId: string;
 }
 
 export async function handleStagedEvent(
@@ -74,8 +77,34 @@ export async function handleStagedEvent(
       importId: delivery.event.importId,
       stagedEventId: delivery.event.eventId,
       mergeJobId: merge.jobId,
-      alreadyCompleted: completion === 'already-completed',
+      alreadyCompleted: completion.alreadyCompleted,
     });
+
+    if (!completion.completedEventPublished) {
+      const published =
+        await dependencies.energyEventPublisher.publishImportCompleted({
+          importId: delivery.event.importId,
+          stagedEventId: delivery.event.eventId,
+          mergeJobId: merge.jobId,
+          bucketName: delivery.event.bucketName,
+          objectName: delivery.event.objectName,
+          objectGeneration: delivery.event.objectGeneration,
+          rowCount: delivery.event.rowCount,
+          validRowCount: delivery.event.validRowCount,
+          invalidRowCount: delivery.event.invalidRowCount,
+        });
+      await dependencies.importRuns.markCompletedEventPublished(
+        delivery.event.importId,
+        published.event.eventId,
+      );
+      log('INFO', {
+        event: 'energy_import_completed_event_published',
+        importId: delivery.event.importId,
+        completedEventId: published.event.eventId,
+        pubsubMessageId: published.messageId,
+        topic: dependencies.energyImportCompletedTopicId,
+      });
+    }
     respond(response, 204);
   } catch (error) {
     if (error instanceof InvalidPubSubEventError) {
