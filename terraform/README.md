@@ -13,6 +13,7 @@ This directory contains Terraform/OpenTofu configuration for managing all GCP in
 - `energy_firestore.tf` - Firestore import state and runtime IAM
 - `energy_events.tf` - Energy domain Pub/Sub topics and publisher IAM
 - `energy_processing.tf` - Processing Eventarc trigger and invocation IAM
+- `energy_anomaly_detection.tf` - Anomaly Eventarc trigger and invocation IAM
 - `terraform.tfvars.example` - Example configuration file
 
 ## Setup
@@ -72,7 +73,7 @@ the service runtime identity can read objects only from that upload bucket.
 The `energy` BigQuery dataset contains:
 
 - `energy_records_staging` for validated rows awaiting processing
-- `energy_records` for curated analytics data
+- `energy_records` for processed analytics data
 - `validation_errors` for searchable row-level data errors
 
 The ingestion runtime can edit only staging and validation errors. BigQuery
@@ -86,6 +87,11 @@ processing service. Only the ingestion runtime can publish to it. Eventarc
 manages a dedicated Pub/Sub subscription and invokes the private
 `energy-processing` Cloud Run service with staged-import events.
 
+After processing completes, `energy-processing` publishes to the
+`energy-import-completed` topic. A separate Eventarc trigger invokes the
+private `energy-anomaly-detection` service. Each trigger uses its own identity,
+with `run.invoker` granted only on its destination service.
+
 ## Bootstrap Order
 
 For an empty GCP project, deploy in two phases because a Cloud Run service can
@@ -95,9 +101,9 @@ only reference an image that already exists:
 2. Build and push the initial application image.
 3. Enable the service and apply again to create Cloud Run.
 
-The repository enables `energy-ingestion` and `energy-processing` by default.
-Their images must be built and pushed before Terraform plans the Cloud Run and
-Eventarc resources.
+The repository enables `energy-ingestion`, `energy-processing`, and
+`energy-anomaly-detection` by default. Their images must be built and pushed
+before Terraform plans the Cloud Run and Eventarc resources.
 
 After this one-time bootstrap, a normal merge to `main` performs the image push
 and Cloud Run deployment in the same pipeline run. The image is pushed first,

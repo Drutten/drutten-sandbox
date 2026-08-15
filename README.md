@@ -19,6 +19,7 @@ CSV upload -> Cloud Storage -> Eventarc -> energy-ingestion (Cloud Run)
                                                       |-> BigQuery (energy_records)
                                                       |-> Firestore (COMPLETED)
                                                       `-> Pub/Sub (EnergyImportCompleted)
+                                                                `-> Eventarc -> energy-anomaly-detection
 ```
 
 The `energy-ingestion` service currently:

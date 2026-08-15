@@ -5,7 +5,7 @@
 project_id = "your-gcp-project-id"
 region     = "europe-west1"
 
-# The energy-ingestion and energy-processing services are enabled by default.
+# The ingestion, processing, and anomaly-detection services are enabled by default.
 # Override services here to customize them or add more deployable applications.
 # CI moves each service's latest tag only after a successful build. Terraform
 # resolves that tag to an immutable digest.
@@ -22,6 +22,16 @@ region     = "europe-west1"
 #   }
 #   "energy-processing" = {
 #     image_name            = "energy-processing"
+#     image_tag             = "latest"
+#     cpu                   = "1"
+#     memory                = "512Mi"
+#     max_instances         = 10
+#     min_instances         = 0
+#     allow_unauthenticated = false
+#     deletion_protection   = true
+#   }
+#   "energy-anomaly-detection" = {
+#     image_name            = "energy-anomaly-detection"
 #     image_tag             = "latest"
 #     cpu                   = "1"
 #     memory                = "512Mi"
