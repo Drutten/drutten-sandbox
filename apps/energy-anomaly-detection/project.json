@@ -1,0 +1,52 @@
+{
+  "name": "energy-anomaly-detection",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/energy-anomaly-detection/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/esbuild:esbuild",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "platform": "node",
+        "outputPath": "dist/apps/energy-anomaly-detection",
+        "format": ["cjs"],
+        "bundle": true,
+        "thirdParty": true,
+        "main": "apps/energy-anomaly-detection/src/main.ts",
+        "tsConfig": "apps/energy-anomaly-detection/tsconfig.app.json"
+      },
+      "configurations": {
+        "development": {},
+        "production": {}
+      }
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "@nx/js:node",
+      "defaultConfiguration": "development",
+      "dependsOn": ["build"],
+      "options": {
+        "buildTarget": "energy-anomaly-detection:build",
+        "runBuildTargetDependencies": false
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "energy-anomaly-detection:build:development"
+        },
+        "production": {
+          "buildTarget": "energy-anomaly-detection:build:production"
+        }
+      }
+    },
+    "test": {
+      "command": "node --test apps/energy-anomaly-detection/tests/*.test.ts"
+    },
+    "docker-build": {
+      "dependsOn": ["build"],
+      "command": "docker build -f apps/energy-anomaly-detection/Dockerfile . -t energy-anomaly-detection"
+    }
+  }
+}

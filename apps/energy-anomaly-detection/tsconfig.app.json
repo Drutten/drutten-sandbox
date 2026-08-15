@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": true,
+    "outDir": "../../dist/apps/energy-anomaly-detection",
+    "types": ["node"],
+    "rootDir": "src",
+    "tsBuildInfoFile": "../../dist/apps/energy-anomaly-detection/tsconfig.app.tsbuildinfo"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": []
+}

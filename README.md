@@ -16,6 +16,9 @@ CSV upload -> Cloud Storage -> Eventarc -> energy-ingestion (Cloud Run)
                                       |-> BigQuery (staging and validation errors)
                                       `-> Pub/Sub (EnergyImportStaged)
                                                 `-> Eventarc -> energy-processing
+                                                      |-> BigQuery (energy_records)
+                                                      |-> Firestore (COMPLETED)
+                                                      `-> Pub/Sub (EnergyImportCompleted)
 ```
 
 The `energy-ingestion` service currently:
@@ -30,13 +33,15 @@ The `energy-ingestion` service currently:
 8. Publishes `EnergyImportStaged` with a deterministic event ID.
 
 Firestore is the control plane for operational import state. BigQuery is the
-data plane for records and searchable validation errors. Deduplication into
-the processed `energy_records` table will be handled by a separate processing
-service.
+data plane for records and searchable validation errors.
 
-The `energy-processing` service currently receives and validates staged-import
-events. Its idempotent BigQuery merge into `energy_records` is the next
-increment.
+The `energy-processing` service validates staged-import events, performs an
+idempotent BigQuery merge into `energy_records`, marks the import completed,
+and publishes `EnergyImportCompleted`.
+
+The `energy-anomaly-detection` application currently validates and logs
+completed-import events. Historical analysis and anomaly persistence are the
+next increments.
 
 ## Local development
 
@@ -53,6 +58,8 @@ pnpm exec nx serve energy-ingestion
 pnpm exec nx build energy-ingestion
 pnpm exec nx serve energy-processing
 pnpm exec nx build energy-processing
+pnpm exec nx serve energy-anomaly-detection
+pnpm exec nx build energy-anomaly-detection
 pnpm exec nx graph
 ```
 
