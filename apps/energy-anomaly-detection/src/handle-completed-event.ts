@@ -32,6 +32,9 @@ export async function handleCompletedEvent(
     const records = await dependencies.energyRecords.findByImportId(
       delivery.event.importId,
     );
+    const recordsWithPreviousPeriod = records.filter(
+      record => record.previousRecordId !== undefined,
+    ).length;
     log('INFO', {
       event: 'energy_anomaly_records_read',
       importId: delivery.event.importId,
@@ -39,6 +42,8 @@ export async function handleCompletedEvent(
       recordCount: records.length,
       expectedRecordCount: delivery.event.validRowCount,
       recordCountMatches: records.length === delivery.event.validRowCount,
+      recordsWithPreviousPeriod,
+      recordsWithoutPreviousPeriod: records.length - recordsWithPreviousPeriod,
     });
     respond(response, 204);
   } catch (error) {

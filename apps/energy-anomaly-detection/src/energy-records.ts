@@ -12,6 +12,10 @@ export interface EnergyRecord {
   periodStart: string;
   consumptionKwh: string;
   totalCostSek: string;
+  previousRecordId?: string;
+  previousPeriodStart?: string;
+  previousConsumptionKwh?: string;
+  previousTotalCostSek?: string;
 }
 
 interface EnergyRecordRow {
@@ -20,6 +24,10 @@ interface EnergyRecordRow {
   period_start?: unknown;
   consumption_kwh?: unknown;
   total_cost_sek?: unknown;
+  previous_record_id?: unknown;
+  previous_period_start?: unknown;
+  previous_consumption_kwh?: unknown;
+  previous_total_cost_sek?: unknown;
 }
 
 type QueryRows = (
@@ -48,13 +56,29 @@ export class BigQueryEnergyRecordReader implements EnergyRecordReader {
   async findByImportId(importId: string): Promise<EnergyRecord[]> {
     const rows = await this.queryRows({
       query: `
-        SELECT
-          record_id,
-          meter_id,
-          CAST(period_start AS STRING) AS period_start,
-          CAST(consumption_kwh AS STRING) AS consumption_kwh,
-          CAST(total_cost_sek AS STRING) AS total_cost_sek
-        FROM \`${this.datasetId}.energy_records\`
+        WITH energy_history AS (
+          SELECT
+            record_id,
+            meter_id,
+            CAST(period_start AS STRING) AS period_start,
+            CAST(consumption_kwh AS STRING) AS consumption_kwh,
+            CAST(total_cost_sek AS STRING) AS total_cost_sek,
+            source_import_id,
+            LAG(record_id) OVER meter_history AS previous_record_id,
+            CAST(LAG(period_start) OVER meter_history AS STRING)
+              AS previous_period_start,
+            CAST(LAG(consumption_kwh) OVER meter_history AS STRING)
+              AS previous_consumption_kwh,
+            CAST(LAG(total_cost_sek) OVER meter_history AS STRING)
+              AS previous_total_cost_sek
+          FROM \`${this.datasetId}.energy_records\`
+          WINDOW meter_history AS (
+            PARTITION BY meter_id
+            ORDER BY period_start, period_end, record_id
+          )
+        )
+        SELECT * EXCEPT (source_import_id)
+        FROM energy_history
         WHERE source_import_id = @importId
         ORDER BY meter_id, period_start
       `,
@@ -68,6 +92,22 @@ export class BigQueryEnergyRecordReader implements EnergyRecordReader {
       periodStart: requiredString(row.period_start, 'period_start'),
       consumptionKwh: requiredString(row.consumption_kwh, 'consumption_kwh'),
       totalCostSek: requiredString(row.total_cost_sek, 'total_cost_sek'),
+      previousRecordId: optionalString(
+        row.previous_record_id,
+        'previous_record_id',
+      ),
+      previousPeriodStart: optionalString(
+        row.previous_period_start,
+        'previous_period_start',
+      ),
+      previousConsumptionKwh: optionalString(
+        row.previous_consumption_kwh,
+        'previous_consumption_kwh',
+      ),
+      previousTotalCostSek: optionalString(
+        row.previous_total_cost_sek,
+        'previous_total_cost_sek',
+      ),
     }));
   }
 }
@@ -84,4 +124,9 @@ function requiredString(value: unknown, fieldName: string): string {
     throw new Error(`BigQuery returned an invalid ${fieldName}`);
   }
   return value;
+}
+
+function optionalString(value: unknown, fieldName: string): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  return requiredString(value, fieldName);
 }
