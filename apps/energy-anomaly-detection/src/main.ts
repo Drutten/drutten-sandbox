@@ -2,9 +2,14 @@ import {createServer} from 'node:http';
 import {handleCompletedEvent} from './handle-completed-event.js';
 import {respond} from './http.js';
 import {log} from './logging.js';
+import {BigQueryEnergyRecordReader} from './energy-records.js';
 
 const host = process.env.HOST ?? '0.0.0.0';
 const port = Number(process.env.PORT ?? 3000);
+const energyRecords = new BigQueryEnergyRecordReader(
+  process.env.ENERGY_DATASET_ID ?? 'energy',
+  process.env.GCP_REGION,
+);
 
 const server = createServer((request, response) => {
   if (request.method === 'GET' && request.url === '/health') {
@@ -15,7 +20,7 @@ const server = createServer((request, response) => {
     respond(response, 405, {error: 'Method not allowed'});
     return;
   }
-  void handleCompletedEvent(request, response);
+  void handleCompletedEvent(request, response, {energyRecords});
 });
 
 server.listen(port, host, () => {

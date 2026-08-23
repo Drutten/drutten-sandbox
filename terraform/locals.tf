@@ -44,7 +44,10 @@ locals {
       min_instances         = 0
       allow_unauthenticated = false
       deletion_protection   = true
-      environment_variables = {}
+      environment_variables = {
+        ENERGY_DATASET_ID = "energy"
+        GCP_REGION        = var.region
+      }
     }
   }
 

@@ -205,3 +205,24 @@ resource "google_project_iam_member" "energy_processing_job_user" {
   role    = "roles/bigquery.jobUser"
   member  = google_service_account.service_runtime[local.energy_processing_service_name].member
 }
+
+# Anomaly detection reads processed records but does not own or modify them.
+resource "google_bigquery_table_iam_member" "energy_anomaly_detection_records_reader" {
+  count = local.energy_anomaly_detection_enabled ? 1 : 0
+
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.energy.dataset_id
+  table_id   = google_bigquery_table.energy_records.table_id
+  role       = "roles/bigquery.dataViewer"
+  member     = google_service_account.service_runtime[local.energy_anomaly_detection_service_name].member
+}
+
+# Query jobs require project-level job creation, while access to data remains
+# restricted to the table-level binding above.
+resource "google_project_iam_member" "energy_anomaly_detection_job_user" {
+  count = local.energy_anomaly_detection_enabled ? 1 : 0
+
+  project = var.project_id
+  role    = "roles/bigquery.jobUser"
+  member  = google_service_account.service_runtime[local.energy_anomaly_detection_service_name].member
+}

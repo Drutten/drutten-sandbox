@@ -5,10 +5,16 @@ import {
   InvalidPubSubEventError,
   parsePubSubEvent,
 } from './parse-pubsub-event.ts';
+import type {EnergyRecordReader} from './energy-records.ts';
+
+export interface CompletedEventDependencies {
+  energyRecords: EnergyRecordReader;
+}
 
 export async function handleCompletedEvent(
   request: IncomingMessage,
   response: ServerResponse,
+  dependencies: CompletedEventDependencies,
 ): Promise<void> {
   try {
     const delivery = await parsePubSubEvent(request);
@@ -21,6 +27,18 @@ export async function handleCompletedEvent(
       rowCount: delivery.event.rowCount,
       validRowCount: delivery.event.validRowCount,
       invalidRowCount: delivery.event.invalidRowCount,
+    });
+
+    const records = await dependencies.energyRecords.findByImportId(
+      delivery.event.importId,
+    );
+    log('INFO', {
+      event: 'energy_anomaly_records_read',
+      importId: delivery.event.importId,
+      completedEventId: delivery.event.eventId,
+      recordCount: records.length,
+      expectedRecordCount: delivery.event.validRowCount,
+      recordCountMatches: records.length === delivery.event.validRowCount,
     });
     respond(response, 204);
   } catch (error) {
