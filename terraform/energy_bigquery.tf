@@ -125,6 +125,36 @@ resource "google_bigquery_table" "validation_errors" {
   ])
 }
 
+resource "google_bigquery_table" "consumption_alerts" {
+  dataset_id          = google_bigquery_dataset.energy.dataset_id
+  table_id            = "consumption_alerts"
+  description         = "Idempotent alerts for unusual household energy consumption"
+  deletion_protection = true
+
+  time_partitioning {
+    type  = "MONTH"
+    field = "period_start"
+  }
+
+  clustering = ["meter_id", "reason"]
+
+  schema = jsonencode([
+    { name = "alert_id", type = "STRING", mode = "REQUIRED", description = "Deterministic ID for one record and alert rule" },
+    { name = "record_id", type = "STRING", mode = "REQUIRED" },
+    { name = "meter_id", type = "STRING", mode = "REQUIRED" },
+    { name = "period_start", type = "DATE", mode = "REQUIRED" },
+    { name = "previous_period_start", type = "DATE", mode = "REQUIRED" },
+    { name = "consumption_kwh", type = "NUMERIC", mode = "REQUIRED" },
+    { name = "previous_consumption_kwh", type = "NUMERIC", mode = "REQUIRED" },
+    { name = "change_percent", type = "NUMERIC", mode = "REQUIRED" },
+    { name = "reason", type = "STRING", mode = "REQUIRED" },
+    { name = "source_import_id", type = "STRING", mode = "REQUIRED" },
+    { name = "source_completed_event_id", type = "STRING", mode = "REQUIRED" },
+    { name = "detected_at", type = "TIMESTAMP", mode = "REQUIRED" },
+    { name = "updated_at", type = "TIMESTAMP", mode = "REQUIRED" },
+  ])
+}
+
 # Ingestion may write only to the tables it owns. A future processing service
 # will receive separate read access to staging and write access to the curated table.
 resource "google_bigquery_table_iam_member" "energy_ingestion_data_editor" {
@@ -214,6 +244,17 @@ resource "google_bigquery_table_iam_member" "energy_anomaly_detection_records_re
   dataset_id = google_bigquery_dataset.energy.dataset_id
   table_id   = google_bigquery_table.energy_records.table_id
   role       = "roles/bigquery.dataViewer"
+  member     = google_service_account.service_runtime[local.energy_anomaly_detection_service_name].member
+}
+
+# Anomaly detection owns its alert output but cannot modify energy_records.
+resource "google_bigquery_table_iam_member" "energy_anomaly_detection_alerts_editor" {
+  count = local.energy_anomaly_detection_enabled ? 1 : 0
+
+  project    = var.project_id
+  dataset_id = google_bigquery_dataset.energy.dataset_id
+  table_id   = google_bigquery_table.consumption_alerts.table_id
+  role       = "roles/bigquery.dataEditor"
   member     = google_service_account.service_runtime[local.energy_anomaly_detection_service_name].member
 }
 

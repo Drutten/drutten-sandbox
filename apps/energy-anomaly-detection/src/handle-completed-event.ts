@@ -1,5 +1,9 @@
 import type {IncomingMessage, ServerResponse} from 'node:http';
 import {analyzeEnergyRecords} from './analyze-energy-records.ts';
+import {
+  createConsumptionAlert,
+  type ConsumptionAlertWriter,
+} from './consumption-alerts.ts';
 import {respond} from './http.ts';
 import {log} from './logging.ts';
 import {
@@ -10,6 +14,7 @@ import type {EnergyRecordReader} from './energy-records.ts';
 
 export interface CompletedEventDependencies {
   energyRecords: EnergyRecordReader;
+  consumptionAlerts: ConsumptionAlertWriter;
 }
 
 export async function handleCompletedEvent(
@@ -49,6 +54,17 @@ export async function handleCompletedEvent(
 
     const analyses = analyzeEnergyRecords(records);
     const anomalies = analyses.filter(analysis => analysis.result.isAnomaly);
+    const alerts = anomalies.map(analysis =>
+      createConsumptionAlert(
+        delivery.event.importId,
+        delivery.event.eventId,
+        analysis,
+      ),
+    );
+    const alertMerge = await dependencies.consumptionAlerts.merge(
+      alerts,
+      delivery.event.eventId,
+    );
 
     for (const {record, result} of anomalies) {
       log('WARNING', {
@@ -75,6 +91,9 @@ export async function handleCompletedEvent(
         analysis => analysis.result.changePercent !== null,
       ).length,
       anomalyCount: anomalies.length,
+      alertMergeJobId: alertMerge.jobId,
+      alertsAffectedRowCount: alertMerge.affectedRowCount,
+      reusedExistingAlertMergeJob: alertMerge.reusedExistingJob,
     });
 
     respond(response, 204);
