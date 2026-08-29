@@ -75,6 +75,8 @@ The `energy` BigQuery dataset contains:
 - `energy_records_staging` for validated rows awaiting processing
 - `energy_records` for processed analytics data
 - `validation_errors` for searchable row-level data errors
+- `consumption_alerts` for detected consumption anomalies
+- `energy_monthly_overview` view for dashboards and reporting
 
 The ingestion runtime can edit only staging and validation errors. BigQuery
 also requires `tables.create` at dataset level for load jobs, so a custom role

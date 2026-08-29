@@ -155,6 +155,56 @@ resource "google_bigquery_table" "consumption_alerts" {
   ])
 }
 
+resource "google_bigquery_table" "energy_monthly_overview" {
+  dataset_id          = google_bigquery_dataset.energy.dataset_id
+  table_id            = "energy_monthly_overview"
+  description         = "Monthly energy metrics and consumption anomalies for dashboards"
+  deletion_protection = true
+
+  view {
+    use_legacy_sql = false
+    query          = <<-SQL
+      WITH history AS (
+        SELECT
+          record_id,
+          meter_id,
+          period_start,
+          period_end,
+          consumption_kwh,
+          estimated_annual_kwh,
+          grid_total_sek,
+          electricity_total_sek,
+          total_cost_sek,
+          LAG(period_start) OVER meter_history AS previous_period_start,
+          LAG(consumption_kwh) OVER meter_history AS previous_consumption_kwh,
+          LAG(total_cost_sek) OVER meter_history AS previous_total_cost_sek
+        FROM `${var.project_id}.${google_bigquery_dataset.energy.dataset_id}.${google_bigquery_table.energy_records.table_id}`
+        WINDOW meter_history AS (
+          PARTITION BY meter_id
+          ORDER BY period_start, period_end, record_id
+        )
+      )
+      SELECT
+        history.*,
+        SAFE_DIVIDE(
+          history.consumption_kwh - history.previous_consumption_kwh,
+          history.previous_consumption_kwh
+        ) * 100 AS consumption_change_percent,
+        SAFE_DIVIDE(
+          history.total_cost_sek - history.previous_total_cost_sek,
+          history.previous_total_cost_sek
+        ) * 100 AS total_cost_change_percent,
+        alert.alert_id IS NOT NULL AS is_consumption_anomaly,
+        alert.alert_id,
+        alert.reason AS alert_reason,
+        alert.detected_at AS alert_detected_at
+      FROM history
+      LEFT JOIN `${var.project_id}.${google_bigquery_dataset.energy.dataset_id}.${google_bigquery_table.consumption_alerts.table_id}` AS alert
+        ON history.record_id = alert.record_id
+    SQL
+  }
+}
+
 # Ingestion may write only to the tables it owns. A future processing service
 # will receive separate read access to staging and write access to the curated table.
 resource "google_bigquery_table_iam_member" "energy_ingestion_data_editor" {
